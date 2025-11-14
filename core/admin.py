@@ -1,13 +1,65 @@
+from django import forms
 from django.contrib import admin
-from .models import Class, Student
+from .models import Class, Student, Management, Teacher, Course, TaughtCourse, StudentCourse
 
 # Register your models here.
 @admin.register(Class)
 class ClassAdmin(admin.ModelAdmin):
-    list_display = ('class_id', 'class_name')
+    list_display = ('classroom_id', 'scanner_id')
+    search_fields = ('scanner_id',)
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ('student_id', 'name', 'class_fk')
-    list_filter = ('class_fk',)
-    search_fields = ('name',)
+    list_display = ('student_id', 'student_name', 'rfid', 'year', 'dept', 'section', 'overall_attendance')
+    search_fields = ('student_name', 'rfid', 'dept', 'section')
+    list_filter = ('year', 'dept', 'section')
+
+@admin.register(Management)
+class ManagementAdmin(admin.ModelAdmin):
+    list_display = ('Management_id', 'Management_name')
+    search_fields = ('Management_name',)
+
+@admin.register(Course)
+class CourseAdmin(admin.ModelAdmin):
+    list_display = ('course_id', 'course_name')
+    search_fields = ('course_name',)
+
+@admin.register(Teacher)
+class TeacherAdmin(admin.ModelAdmin):
+    list_display = ('teacher_id', 'teacher_name', 'rfid')
+    search_fields = ('teacher_name', 'rfid')
+
+class TaughtCourseAdminForm(forms.ModelForm):
+    class Meta:
+        model = TaughtCourse
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['teacher'].empty_label = "---Select Teacher---"
+        self.fields['course'].empty_label = "---Select Course---"
+
+@admin.register(TaughtCourse)
+class TaughtCourseAdmin(admin.ModelAdmin):
+    form = TaughtCourseAdminForm
+    list_display = ('id', 'teacher', 'course', 'classes_taken')
+    list_filter = ('teacher', 'course')
+    search_fields = ('teacher__teacher_name', 'course__course_name')
+
+class StudentCourseAdminForm(forms.ModelForm):
+    class Meta:
+        model = StudentCourse
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['student'].empty_label = "---Select Student---"
+        self.fields['teacher'].empty_label = "---Select Teacher---"
+        self.fields['course'].empty_label = "---Select Course---"
+
+@admin.register(StudentCourse)
+class StudentCourseAdmin(admin.ModelAdmin):
+    form = StudentCourseAdminForm
+    list_display = ('id', 'student', 'course', 'teacher', 'classes_attended')
+    list_filter = ('course', 'teacher')
+    search_fields = ('student__student_name', 'course__course_name', 'teacher__teacher_name')
