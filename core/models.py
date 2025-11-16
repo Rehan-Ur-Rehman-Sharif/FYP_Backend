@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 # Create your models here.
 class Class(models.Model):
@@ -11,7 +12,9 @@ class Class(models.Model):
 
 class Student(models.Model):
     student_id = models.AutoField(primary_key=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True, related_name='student_profile')
     student_name = models.CharField(max_length=255)
+    email = models.EmailField(unique=True, null=True, blank=True)
     # image = models.ImageField(upload_to='student_images/', null=True, blank=True)  # for CV
     rfid = models.CharField(max_length=100, unique=True)
     overall_attendance = models.FloatField(default=0.0)  # percentage
@@ -31,7 +34,9 @@ class Course(models.Model):
 
 class Teacher(models.Model):
     teacher_id = models.AutoField(primary_key=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True, related_name='teacher_profile')
     teacher_name = models.CharField(max_length=255)
+    email = models.EmailField(unique=True, null=True, blank=True)
     # image = models.ImageField(upload_to='teacher_images/', null=True, blank=True)
     rfid = models.CharField(max_length=100, unique=True)
 
@@ -40,7 +45,9 @@ class Teacher(models.Model):
 
 class Management(models.Model):
     Management_id = models.AutoField(primary_key=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True, related_name='management_profile')
     Management_name = models.CharField(max_length=255)
+    email = models.EmailField(unique=True, null=True, blank=True)
 
     def __str__(self):
         return self.Management_name
