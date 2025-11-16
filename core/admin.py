@@ -10,14 +10,14 @@ class ClassAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ('student_id', 'student_name', 'rfid', 'year', 'dept', 'section', 'overall_attendance')
-    search_fields = ('student_name', 'rfid', 'dept', 'section')
+    list_display = ('student_id', 'student_name', 'email', 'rfid', 'year', 'dept', 'section', 'overall_attendance')
+    search_fields = ('student_name', 'email', 'rfid', 'dept', 'section')
     list_filter = ('year', 'dept', 'section')
 
 @admin.register(Management)
 class ManagementAdmin(admin.ModelAdmin):
-    list_display = ('Management_id', 'Management_name')
-    search_fields = ('Management_name',)
+    list_display = ('Management_id', 'Management_name', 'email')
+    search_fields = ('Management_name', 'email')
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
@@ -26,8 +26,8 @@ class CourseAdmin(admin.ModelAdmin):
 
 @admin.register(Teacher)
 class TeacherAdmin(admin.ModelAdmin):
-    list_display = ('teacher_id', 'teacher_name', 'rfid')
-    search_fields = ('teacher_name', 'rfid')
+    list_display = ('teacher_id', 'teacher_name', 'email', 'rfid')
+    search_fields = ('teacher_name', 'email', 'rfid')
 
 class TaughtCourseAdminForm(forms.ModelForm):
     class Meta:
