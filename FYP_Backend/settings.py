@@ -79,13 +79,22 @@ WSGI_APPLICATION = 'FYP_Backend.wsgi.application'
 
 # Use SQLite for testing if TESTING environment variable is set
 import sys
+import os
 TESTING = 'test' in sys.argv
+USE_SQLITE = os.environ.get('USE_SQLITE', 'True') == 'True'
 
 if TESTING:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': ':memory:',
+        }
+    }
+elif USE_SQLITE:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 else:
@@ -141,6 +150,9 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Login URL for @login_required decorator
+LOGIN_URL = '/api/login/student/'
 
 # Django REST Framework settings
 REST_FRAMEWORK = {
