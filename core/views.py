@@ -5,18 +5,174 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from rest_framework import status, generics
+from rest_framework import status, generics, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import (
     StudentRegistrationSerializer,
     TeacherRegistrationSerializer,
     ManagementRegistrationSerializer,
-    LoginSerializer
+    LoginSerializer,
+    StudentSerializer,
+    TeacherSerializer,
+    ManagementSerializer,
+    CourseSerializer,
+    ClassSerializer,
+    TaughtCourseSerializer,
+    StudentCourseSerializer
 )
-from .models import Student, Teacher, Management, StudentCourse, TaughtCourse
+from .models import Student, Teacher, Management, StudentCourse, TaughtCourse, Course, Class
+
+
+# ============ CRUD ViewSets for all models ============
+
+class StudentViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Student model providing CRUD operations.
+    - GET /students/ - List all students
+    - POST /students/ - Create a student (use registration for new users)
+    - GET /students/{id}/ - Retrieve a student
+    - PUT /students/{id}/ - Update a student
+    - PATCH /students/{id}/ - Partial update a student
+    - DELETE /students/{id}/ - Delete a student
+    """
+    queryset = Student.objects.all()
+    serializer_class = StudentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = self.queryset.all()
+        # Optional filters
+        year = self.request.query_params.get('year')
+        dept = self.request.query_params.get('dept')
+        section = self.request.query_params.get('section')
+        if year:
+            queryset = queryset.filter(year=year)
+        if dept:
+            queryset = queryset.filter(dept=dept)
+        if section:
+            queryset = queryset.filter(section=section)
+        return queryset
+
+
+class TeacherViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Teacher model providing CRUD operations.
+    - GET /teachers/ - List all teachers
+    - POST /teachers/ - Create a teacher (use registration for new users)
+    - GET /teachers/{id}/ - Retrieve a teacher
+    - PUT /teachers/{id}/ - Update a teacher
+    - PATCH /teachers/{id}/ - Partial update a teacher
+    - DELETE /teachers/{id}/ - Delete a teacher
+    """
+    queryset = Teacher.objects.all()
+    serializer_class = TeacherSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class ManagementViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Management model providing CRUD operations.
+    - GET /management/ - List all management users
+    - POST /management/ - Create a management user (use registration for new users)
+    - GET /management/{id}/ - Retrieve a management user
+    - PUT /management/{id}/ - Update a management user
+    - PATCH /management/{id}/ - Partial update a management user
+    - DELETE /management/{id}/ - Delete a management user
+    """
+    queryset = Management.objects.all()
+    serializer_class = ManagementSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class CourseViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Course model providing CRUD operations.
+    - GET /courses/ - List all courses
+    - POST /courses/ - Create a course
+    - GET /courses/{id}/ - Retrieve a course
+    - PUT /courses/{id}/ - Update a course
+    - PATCH /courses/{id}/ - Partial update a course
+    - DELETE /courses/{id}/ - Delete a course
+    """
+    queryset = Course.objects.all()
+    serializer_class = CourseSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class ClassViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Class (Classroom) model providing CRUD operations.
+    - GET /classes/ - List all classes
+    - POST /classes/ - Create a class
+    - GET /classes/{id}/ - Retrieve a class
+    - PUT /classes/{id}/ - Update a class
+    - PATCH /classes/{id}/ - Partial update a class
+    - DELETE /classes/{id}/ - Delete a class
+    """
+    queryset = Class.objects.all()
+    serializer_class = ClassSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class TaughtCourseViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for TaughtCourse model providing CRUD operations.
+    - GET /taught-courses/ - List all taught courses
+    - POST /taught-courses/ - Create a taught course
+    - GET /taught-courses/{id}/ - Retrieve a taught course
+    - PUT /taught-courses/{id}/ - Update a taught course
+    - PATCH /taught-courses/{id}/ - Partial update a taught course
+    - DELETE /taught-courses/{id}/ - Delete a taught course
+    """
+    queryset = TaughtCourse.objects.all()
+    serializer_class = TaughtCourseSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = self.queryset.all()
+        # Optional filters
+        course_id = self.request.query_params.get('course')
+        teacher_id = self.request.query_params.get('teacher')
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        if teacher_id:
+            queryset = queryset.filter(teacher_id=teacher_id)
+        return queryset
+
+
+class StudentCourseViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for StudentCourse model providing CRUD operations.
+    - GET /student-courses/ - List all student courses
+    - POST /student-courses/ - Create a student course
+    - GET /student-courses/{id}/ - Retrieve a student course
+    - PUT /student-courses/{id}/ - Update a student course
+    - PATCH /student-courses/{id}/ - Partial update a student course
+    - DELETE /student-courses/{id}/ - Delete a student course
+    """
+    queryset = StudentCourse.objects.all()
+    serializer_class = StudentCourseSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = self.queryset.all()
+        # Optional filters
+        student_id = self.request.query_params.get('student')
+        course_id = self.request.query_params.get('course')
+        teacher_id = self.request.query_params.get('teacher')
+        if student_id:
+            queryset = queryset.filter(student_id=student_id)
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        if teacher_id:
+            queryset = queryset.filter(teacher_id=teacher_id)
+        return queryset
+
+
+# ============ Registration Views ============
 
 
 class StudentRegistrationView(generics.CreateAPIView):
