@@ -190,7 +190,7 @@ class UpdateAttendanceRequestViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = self.queryset.all()
+        queryset = self.queryset
         # Optional filters
         teacher_id = self.request.query_params.get('teacher')
         student_id = self.request.query_params.get('student')
@@ -209,10 +209,11 @@ class UpdateAttendanceRequestViewSet(viewsets.ModelViewSet):
     def _process_request(self, request, pk, approve):
         """Helper method to approve or reject a request"""
         from django.utils import timezone
+        from django.http import Http404
 
         try:
             attendance_request = self.get_object()
-        except UpdateAttendanceRequest.DoesNotExist:
+        except Http404:
             return Response(
                 {'error': 'Update attendance request not found'},
                 status=status.HTTP_404_NOT_FOUND
