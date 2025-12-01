@@ -68,3 +68,32 @@ class StudentCourse(models.Model):
 
     def __str__(self):
         return f"{self.student} - {self.course} - {self.teacher}"
+
+
+class UpdateAttendanceRequest(models.Model):
+    """
+    Model for attendance update requests sent by teachers.
+    Teachers can request attendance updates for specific students in specific courses.
+    Management can approve or reject these requests.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    teacher = models.ForeignKey('Teacher', on_delete=models.CASCADE, related_name='attendance_update_requests')
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='attendance_update_requests')
+    course = models.ForeignKey('Course', on_delete=models.CASCADE, related_name='attendance_update_requests')
+    classes_to_add = models.CharField(max_length=255)  # e.g., "Class A, Class B" - classes to add to attendance
+    reason = models.TextField(blank=True)  # Optional reason for the request
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    requested_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    processed_by = models.ForeignKey('Management', on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_attendance_requests')
+
+    def __str__(self):
+        return f"Request by {self.teacher} for {self.student} in {self.course} - {self.status}"
+
+    class Meta:
+        ordering = ['-requested_at']
