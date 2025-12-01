@@ -43,7 +43,7 @@ class StudentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = Student.objects.all()
+        queryset = self.queryset.all()
         # Optional filters
         year = self.request.query_params.get('year')
         dept = self.request.query_params.get('dept')
@@ -132,7 +132,7 @@ class TaughtCourseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = TaughtCourse.objects.all()
+        queryset = self.queryset.all()
         # Optional filters
         course_id = self.request.query_params.get('course')
         teacher_id = self.request.query_params.get('teacher')
@@ -158,7 +158,7 @@ class StudentCourseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = StudentCourse.objects.all()
+        queryset = self.queryset.all()
         # Optional filters
         student_id = self.request.query_params.get('student')
         course_id = self.request.query_params.get('course')
