@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import Student, Teacher, Management, Course, Class, TaughtCourse, StudentCourse
+from .models import Student, Teacher, Management, Course, Class, TaughtCourse, StudentCourse, UpdateAttendanceRequest
 
 
 # ============ Model Serializers for CRUD operations ============
@@ -67,6 +67,23 @@ class StudentCourseSerializer(serializers.ModelSerializer):
         model = StudentCourse
         fields = ['id', 'student', 'course', 'teacher', 'student_name', 'course_name', 'teacher_name', 'classes_attended']
         read_only_fields = ['id']
+
+
+class UpdateAttendanceRequestSerializer(serializers.ModelSerializer):
+    """Serializer for UpdateAttendanceRequest model CRUD operations"""
+    teacher_name = serializers.CharField(source='teacher.teacher_name', read_only=True)
+    student_name = serializers.CharField(source='student.student_name', read_only=True)
+    course_name = serializers.CharField(source='course.course_name', read_only=True)
+    processed_by_name = serializers.CharField(source='processed_by.Management_name', read_only=True)
+
+    class Meta:
+        model = UpdateAttendanceRequest
+        fields = [
+            'id', 'teacher', 'student', 'course', 'classes_to_add', 'reason',
+            'status', 'requested_at', 'processed_at', 'processed_by',
+            'teacher_name', 'student_name', 'course_name', 'processed_by_name'
+        ]
+        read_only_fields = ['id', 'status', 'requested_at', 'processed_at', 'processed_by']
 
 
 # ============ Registration Serializers ============

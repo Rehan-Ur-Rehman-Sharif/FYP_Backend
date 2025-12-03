@@ -23,7 +23,8 @@ from .views import (
     CourseViewSet,
     ClassViewSet,
     TaughtCourseViewSet,
-    StudentCourseViewSet
+    StudentCourseViewSet,
+    UpdateAttendanceRequestViewSet
 )
 
 # Create a router for CRUD ViewSets
@@ -35,10 +36,19 @@ router.register(r'courses', CourseViewSet, basename='course')
 router.register(r'classes', ClassViewSet, basename='class')
 router.register(r'taught-courses', TaughtCourseViewSet, basename='taughtcourse')
 router.register(r'student-courses', StudentCourseViewSet, basename='studentcourse')
+router.register(r'update-attendance-requests', UpdateAttendanceRequestViewSet, basename='updateattendancerequest')
 
 urlpatterns = [
     # CRUD API endpoints (from router)
     path('', include(router.urls)),
+    
+    # Custom actions for UpdateAttendanceRequest
+    path('update-attendance-requests/<int:pk>/approve/', 
+         UpdateAttendanceRequestViewSet.as_view({'post': 'approve'}), 
+         name='updateattendancerequest-approve'),
+    path('update-attendance-requests/<int:pk>/reject/', 
+         UpdateAttendanceRequestViewSet.as_view({'post': 'reject'}), 
+         name='updateattendancerequest-reject'),
     
     # API Registration endpoints
     path('auth/register/student/', StudentRegistrationView.as_view(), name='student-register'),

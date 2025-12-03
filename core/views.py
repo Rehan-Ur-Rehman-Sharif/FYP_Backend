@@ -21,9 +21,10 @@ from .serializers import (
     CourseSerializer,
     ClassSerializer,
     TaughtCourseSerializer,
-    StudentCourseSerializer
+    StudentCourseSerializer,
+    UpdateAttendanceRequestSerializer
 )
-from .models import Student, Teacher, Management, StudentCourse, TaughtCourse, Course, Class
+from .models import Student, Teacher, Management, StudentCourse, TaughtCourse, Course, Class, UpdateAttendanceRequest
 
 
 # ============ CRUD ViewSets for all models ============
@@ -170,6 +171,114 @@ class StudentCourseViewSet(viewsets.ModelViewSet):
         if teacher_id:
             queryset = queryset.filter(teacher_id=teacher_id)
         return queryset
+
+
+class UpdateAttendanceRequestViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for UpdateAttendanceRequest model providing CRUD operations.
+    - GET /update-attendance-requests/ - List all update attendance requests
+    - POST /update-attendance-requests/ - Create an update attendance request (by teacher)
+    - GET /update-attendance-requests/{id}/ - Retrieve an update attendance request
+    - PUT /update-attendance-requests/{id}/ - Update an update attendance request
+    - PATCH /update-attendance-requests/{id}/ - Partial update an update attendance request
+    - DELETE /update-attendance-requests/{id}/ - Delete an update attendance request
+    - POST /update-attendance-requests/{id}/approve/ - Approve the request (by management)
+    - POST /update-attendance-requests/{id}/reject/ - Reject the request (by management)
+    """
+    queryset = UpdateAttendanceRequest.objects.all()
+    serializer_class = UpdateAttendanceRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = self.queryset
+        # Optional filters
+        teacher_id = self.request.query_params.get('teacher')
+        student_id = self.request.query_params.get('student')
+        course_id = self.request.query_params.get('course')
+        request_status = self.request.query_params.get('status')
+        if teacher_id:
+            queryset = queryset.filter(teacher_id=teacher_id)
+        if student_id:
+            queryset = queryset.filter(student_id=student_id)
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        if request_status:
+            queryset = queryset.filter(status=request_status)
+        return queryset
+
+    def _process_request(self, request, pk, approve):
+        """Helper method to approve or reject a request"""
+        from django.utils import timezone
+        from django.http import Http404
+
+        try:
+            attendance_request = self.get_object()
+        except Http404:
+            return Response(
+                {'error': 'Update attendance request not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if attendance_request.status != 'pending':
+            return Response(
+                {'error': f'Request has already been {attendance_request.status}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get management user
+        try:
+            management = Management.objects.get(user=request.user)
+        except Management.DoesNotExist:
+            return Response(
+                {'error': 'Only management users can process attendance requests'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if approve:
+            # Approve: Update the student's attendance in the StudentCourse
+            try:
+                student_course = StudentCourse.objects.get(
+                    student=attendance_request.student,
+                    course=attendance_request.course,
+                    teacher=attendance_request.teacher
+                )
+                # Append the new classes to the existing attendance
+                if student_course.classes_attended:
+                    student_course.classes_attended = f"{student_course.classes_attended}, {attendance_request.classes_to_add}"
+                else:
+                    student_course.classes_attended = attendance_request.classes_to_add
+                student_course.save()
+            except StudentCourse.DoesNotExist:
+                # Create new StudentCourse record if it doesn't exist
+                StudentCourse.objects.create(
+                    student=attendance_request.student,
+                    course=attendance_request.course,
+                    teacher=attendance_request.teacher,
+                    classes_attended=attendance_request.classes_to_add
+                )
+            attendance_request.status = 'approved'
+            message = 'Attendance request approved and attendance updated'
+        else:
+            attendance_request.status = 'rejected'
+            message = 'Attendance request rejected'
+
+        attendance_request.processed_at = timezone.now()
+        attendance_request.processed_by = management
+        attendance_request.save()
+
+        serializer = self.get_serializer(attendance_request)
+        return Response({
+            'message': message,
+            'request': serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def approve(self, request, pk=None):
+        """Approve the attendance update request"""
+        return self._process_request(request, pk, approve=True)
+
+    def reject(self, request, pk=None):
+        """Reject the attendance update request"""
+        return self._process_request(request, pk, approve=False)
 
 
 # ============ Registration Views ============
