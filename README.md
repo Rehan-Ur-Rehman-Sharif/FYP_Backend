@@ -1,4 +1,4 @@
-# Student Attendance Management System - Backend
+# Smart Attendance Management System - Backend
 
 A Django-based REST API backend for managing student attendance in educational institutions.
 
