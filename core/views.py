@@ -482,6 +482,29 @@ class RFIDScanView(APIView):
     """
     permission_classes = [AllowAny]  # Allow hardware to scan without auth
 
+    def _mark_attendance_if_complete(self, record, session):
+        """
+        Helper method to mark attendance and update StudentCourse if both scans are complete.
+        """
+        if record.rfid_scanned and record.qr_scanned:
+            record.is_present = True
+            record.marked_present_at = timezone.now()
+            
+            # Update StudentCourse attendance
+            student_course, _ = StudentCourse.objects.get_or_create(
+                student=record.student,
+                course=session.course,
+                teacher=session.teacher
+            )
+            
+            # Append the session date to classes_attended
+            session_date = session.started_at.strftime('%Y-%m-%d')
+            if student_course.classes_attended:
+                student_course.classes_attended = f"{student_course.classes_attended}, {session_date}"
+            else:
+                student_course.classes_attended = session_date
+            student_course.save()
+
     def post(self, request):
         serializer = RFIDScanSerializer(data=request.data)
         if not serializer.is_valid():
@@ -533,24 +556,7 @@ class RFIDScanView(APIView):
         record.rfid_scanned_at = timezone.now()
 
         # Check if both RFID and QR are scanned
-        if record.qr_scanned:
-            record.is_present = True
-            record.marked_present_at = timezone.now()
-            
-            # Update StudentCourse attendance
-            student_course, _ = StudentCourse.objects.get_or_create(
-                student=student,
-                course=session.course,
-                teacher=session.teacher
-            )
-            
-            # Append the session date to classes_attended
-            session_date = session.started_at.strftime('%Y-%m-%d')
-            if student_course.classes_attended:
-                student_course.classes_attended = f"{student_course.classes_attended}, {session_date}"
-            else:
-                student_course.classes_attended = session_date
-            student_course.save()
+        self._mark_attendance_if_complete(record, session)
 
         record.save()
 
@@ -570,6 +576,29 @@ class QRScanView(APIView):
     POST /attendance/qr-scan/
     """
     permission_classes = [IsAuthenticated]
+
+    def _mark_attendance_if_complete(self, record, session):
+        """
+        Helper method to mark attendance and update StudentCourse if both scans are complete.
+        """
+        if record.rfid_scanned and record.qr_scanned:
+            record.is_present = True
+            record.marked_present_at = timezone.now()
+            
+            # Update StudentCourse attendance
+            student_course, _ = StudentCourse.objects.get_or_create(
+                student=record.student,
+                course=session.course,
+                teacher=session.teacher
+            )
+            
+            # Append the session date to classes_attended
+            session_date = session.started_at.strftime('%Y-%m-%d')
+            if student_course.classes_attended:
+                student_course.classes_attended = f"{student_course.classes_attended}, {session_date}"
+            else:
+                student_course.classes_attended = session_date
+            student_course.save()
 
     def post(self, request):
         serializer = QRScanSerializer(data=request.data)
@@ -622,24 +651,7 @@ class QRScanView(APIView):
         record.qr_scanned_at = timezone.now()
 
         # Check if both RFID and QR are scanned
-        if record.rfid_scanned:
-            record.is_present = True
-            record.marked_present_at = timezone.now()
-            
-            # Update StudentCourse attendance
-            student_course, _ = StudentCourse.objects.get_or_create(
-                student=student,
-                course=session.course,
-                teacher=session.teacher
-            )
-            
-            # Append the session date to classes_attended
-            session_date = session.started_at.strftime('%Y-%m-%d')
-            if student_course.classes_attended:
-                student_course.classes_attended = f"{student_course.classes_attended}, {session_date}"
-            else:
-                student_course.classes_attended = session_date
-            student_course.save()
+        self._mark_attendance_if_complete(record, session)
 
         record.save()
 
