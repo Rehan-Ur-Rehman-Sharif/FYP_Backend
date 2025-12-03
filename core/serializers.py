@@ -1,7 +1,10 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import Student, Teacher, Management, Course, Class, TaughtCourse, StudentCourse, UpdateAttendanceRequest
+from .models import (
+    Student, Teacher, Management, Course, Class, TaughtCourse, StudentCourse,
+    UpdateAttendanceRequest, AttendanceSession, AttendanceRecord
+)
 
 
 # ============ Model Serializers for CRUD operations ============
@@ -53,7 +56,7 @@ class TaughtCourseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TaughtCourse
-        fields = ['id', 'course', 'teacher', 'course_name', 'teacher_name', 'classes_taken']
+        fields = ['id', 'course', 'teacher', 'course_name', 'teacher_name', 'classes_taken', 'section', 'year']
         read_only_fields = ['id']
 
 
@@ -213,3 +216,56 @@ class ManagementRegistrationSerializer(serializers.ModelSerializer):
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True)
+
+
+class AttendanceSessionSerializer(serializers.ModelSerializer):
+    """Serializer for AttendanceSession model"""
+    teacher_name = serializers.CharField(source='teacher.teacher_name', read_only=True)
+    course_name = serializers.CharField(source='course.course_name', read_only=True)
+
+    class Meta:
+        model = AttendanceSession
+        fields = [
+            'id', 'teacher', 'course', 'section', 'year', 'status',
+            'qr_code_token', 'started_at', 'stopped_at',
+            'teacher_name', 'course_name'
+        ]
+        read_only_fields = ['id', 'qr_code_token', 'started_at', 'stopped_at']
+
+
+class AttendanceRecordSerializer(serializers.ModelSerializer):
+    """Serializer for AttendanceRecord model"""
+    student_name = serializers.CharField(source='student.student_name', read_only=True)
+    session_details = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AttendanceRecord
+        fields = [
+            'id', 'session', 'student', 'rfid_scanned', 'rfid_scanned_at',
+            'qr_scanned', 'qr_scanned_at', 'is_present', 'marked_present_at',
+            'student_name', 'session_details'
+        ]
+        read_only_fields = [
+            'id', 'rfid_scanned', 'rfid_scanned_at', 'qr_scanned', 'qr_scanned_at',
+            'is_present', 'marked_present_at'
+        ]
+
+    def get_session_details(self, obj):
+        return {
+            'course': obj.session.course.course_name,
+            'teacher': obj.session.teacher.teacher_name,
+            'section': obj.session.section,
+            'year': obj.session.year
+        }
+
+
+class RFIDScanSerializer(serializers.Serializer):
+    """Serializer for RFID scan requests"""
+    rfid = serializers.CharField(required=True)
+    session_id = serializers.IntegerField(required=True)
+
+
+class QRScanSerializer(serializers.Serializer):
+    """Serializer for QR scan requests"""
+    qr_token = serializers.CharField(required=True)
+    student_id = serializers.IntegerField(required=True)

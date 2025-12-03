@@ -3,7 +3,10 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.contrib.auth.models import User
-from .models import Student, Teacher, Management, Course, Class, TaughtCourse, StudentCourse, UpdateAttendanceRequest
+from .models import (
+    Student, Teacher, Management, Course, Class, TaughtCourse, StudentCourse,
+    UpdateAttendanceRequest, AttendanceSession, AttendanceRecord
+)
 
 
 class StudentRegistrationTestCase(APITestCase):
@@ -848,4 +851,553 @@ class UpdateAttendanceRequestApproveRejectTestCase(APITestCase):
         """Test that unauthenticated users cannot reject requests"""
         response = self.client.post(self.reject_url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+# ============ Attendance Session Tests ============
+
+class AttendanceSessionTestCase(APITestCase):
+    """Test attendance session functionality"""
+    
+    def setUp(self):
+        # Create authenticated user
+        self.user = User.objects.create_user(
+            username='teacher@test.com',
+            email='teacher@test.com',
+            password='TestPass123!'
+        )
+        self.teacher = Teacher.objects.create(
+            user=self.user,
+            teacher_name='Test Teacher',
+            email='teacher@test.com',
+            rfid='RFID001'
+        )
+        self.course = Course.objects.create(course_name='Test Course')
+        
+        self.client.force_authenticate(user=self.user)
+        
+        self.session_url = reverse('attendancesession-list')
+    
+    def test_create_attendance_session(self):
+        """Test creating/starting an attendance session"""
+        data = {
+            'teacher': self.teacher.teacher_id,
+            'course': self.course.course_id,
+            'section': 'A',
+            'year': 1
+        }
+        response = self.client.post(self.session_url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['session']['status'], 'active')
+        self.assertIn('qr_code_token', response.data['session'])
+        self.assertIsNotNone(response.data['session']['qr_code_token'])
+    
+    def test_list_attendance_sessions(self):
+        """Test listing attendance sessions"""
+        AttendanceSession.objects.create(
+            teacher=self.teacher,
+            course=self.course,
+            section='A',
+            year=1,
+            qr_code_token='test_token_1'
+        )
+        
+        response = self.client.get(self.session_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+    
+    def test_stop_attendance_session(self):
+        """Test stopping an active attendance session"""
+        session = AttendanceSession.objects.create(
+            teacher=self.teacher,
+            course=self.course,
+            section='A',
+            year=1,
+            qr_code_token='test_token_1',
+            status='active'
+        )
+        
+        stop_url = reverse('attendancesession-stop', args=[session.id])
+        response = self.client.post(stop_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['session']['status'], 'stopped')
+        self.assertIsNotNone(response.data['session']['stopped_at'])
+    
+    def test_cannot_stop_already_stopped_session(self):
+        """Test that already stopped sessions cannot be stopped again"""
+        session = AttendanceSession.objects.create(
+            teacher=self.teacher,
+            course=self.course,
+            section='A',
+            year=1,
+            qr_code_token='test_token_1',
+            status='stopped'
+        )
+        
+        stop_url = reverse('attendancesession-stop', args=[session.id])
+        response = self.client.post(stop_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_get_qr_code(self):
+        """Test getting QR code for an active session"""
+        session = AttendanceSession.objects.create(
+            teacher=self.teacher,
+            course=self.course,
+            section='A',
+            year=1,
+            qr_code_token='test_token_1',
+            status='active'
+        )
+        
+        qr_url = reverse('attendancesession-qr', args=[session.id])
+        response = self.client.get(qr_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('qr_code', response.data)
+        self.assertIn('qr_token', response.data)
+        self.assertIn('data:image/png;base64,', response.data['qr_code'])
+    
+    def test_cannot_get_qr_for_stopped_session(self):
+        """Test that QR code cannot be generated for stopped sessions"""
+        session = AttendanceSession.objects.create(
+            teacher=self.teacher,
+            course=self.course,
+            section='A',
+            year=1,
+            qr_code_token='test_token_1',
+            status='stopped'
+        )
+        
+        qr_url = reverse('attendancesession-qr', args=[session.id])
+        response = self.client.get(qr_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_filter_sessions_by_teacher(self):
+        """Test filtering sessions by teacher"""
+        other_teacher = Teacher.objects.create(
+            teacher_name='Other Teacher',
+            email='other@test.com',
+            rfid='RFID002'
+        )
+        
+        AttendanceSession.objects.create(
+            teacher=self.teacher,
+            course=self.course,
+            section='A',
+            year=1,
+            qr_code_token='test_token_1'
+        )
+        
+        AttendanceSession.objects.create(
+            teacher=other_teacher,
+            course=self.course,
+            section='B',
+            year=2,
+            qr_code_token='test_token_2'
+        )
+        
+        response = self.client.get(self.session_url, {'teacher': self.teacher.teacher_id})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['teacher'], self.teacher.teacher_id)
+
+
+class RFIDScanTestCase(APITestCase):
+    """Test RFID scanning functionality"""
+    
+    def setUp(self):
+        self.teacher = Teacher.objects.create(
+            teacher_name='Test Teacher',
+            email='teacher@test.com',
+            rfid='RFID001'
+        )
+        self.course = Course.objects.create(course_name='Test Course')
+        self.student = Student.objects.create(
+            student_name='Test Student',
+            email='student@test.com',
+            rfid='RFID_STUDENT_1',
+            year=1,
+            dept='CS',
+            section='A'
+        )
+        self.session = AttendanceSession.objects.create(
+            teacher=self.teacher,
+            course=self.course,
+            section='A',
+            year=1,
+            qr_code_token='test_token_1',
+            status='active'
+        )
+        
+        self.rfid_scan_url = reverse('rfid-scan')
+    
+    def test_rfid_scan_success(self):
+        """Test successful RFID scan"""
+        data = {
+            'rfid': 'RFID_STUDENT_1',
+            'session_id': self.session.id
+        }
+        response = self.client.post(self.rfid_scan_url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['rfid_scanned'])
+        self.assertFalse(response.data['qr_scanned'])
+        self.assertFalse(response.data['is_present'])
+        self.assertTrue(response.data['needs_qr'])
+        
+        # Verify record was created
+        record = AttendanceRecord.objects.get(session=self.session, student=self.student)
+        self.assertTrue(record.rfid_scanned)
+        self.assertFalse(record.qr_scanned)
+        self.assertFalse(record.is_present)
+    
+    def test_rfid_scan_invalid_student(self):
+        """Test RFID scan with invalid student RFID"""
+        data = {
+            'rfid': 'INVALID_RFID',
+            'session_id': self.session.id
+        }
+        response = self.client.post(self.rfid_scan_url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+    
+    def test_rfid_scan_inactive_session(self):
+        """Test RFID scan on inactive session"""
+        self.session.status = 'stopped'
+        self.session.save()
+        
+        data = {
+            'rfid': 'RFID_STUDENT_1',
+            'session_id': self.session.id
+        }
+        response = self.client.post(self.rfid_scan_url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_rfid_scan_wrong_section(self):
+        """Test RFID scan with student from different section"""
+        self.student.section = 'B'
+        self.student.save()
+        
+        data = {
+            'rfid': 'RFID_STUDENT_1',
+            'session_id': self.session.id
+        }
+        response = self.client.post(self.rfid_scan_url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class QRScanTestCase(APITestCase):
+    """Test QR code scanning functionality"""
+    
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='student@test.com',
+            email='student@test.com',
+            password='TestPass123!'
+        )
+        self.teacher = Teacher.objects.create(
+            teacher_name='Test Teacher',
+            email='teacher@test.com',
+            rfid='RFID001'
+        )
+        self.course = Course.objects.create(course_name='Test Course')
+        self.student = Student.objects.create(
+            user=self.user,
+            student_name='Test Student',
+            email='student@test.com',
+            rfid='RFID_STUDENT_1',
+            year=1,
+            dept='CS',
+            section='A'
+        )
+        self.session = AttendanceSession.objects.create(
+            teacher=self.teacher,
+            course=self.course,
+            section='A',
+            year=1,
+            qr_code_token='test_token_1',
+            status='active'
+        )
+        
+        self.client.force_authenticate(user=self.user)
+        self.qr_scan_url = reverse('qr-scan')
+    
+    def test_qr_scan_success(self):
+        """Test successful QR scan"""
+        data = {
+            'qr_token': 'test_token_1',
+            'student_id': self.student.student_id
+        }
+        response = self.client.post(self.qr_scan_url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['rfid_scanned'])
+        self.assertTrue(response.data['qr_scanned'])
+        self.assertFalse(response.data['is_present'])
+        self.assertTrue(response.data['needs_rfid'])
+        
+        # Verify record was created
+        record = AttendanceRecord.objects.get(session=self.session, student=self.student)
+        self.assertFalse(record.rfid_scanned)
+        self.assertTrue(record.qr_scanned)
+        self.assertFalse(record.is_present)
+    
+    def test_qr_scan_invalid_token(self):
+        """Test QR scan with invalid token"""
+        data = {
+            'qr_token': 'invalid_token',
+            'student_id': self.student.student_id
+        }
+        response = self.client.post(self.qr_scan_url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+    
+    def test_qr_scan_inactive_session(self):
+        """Test QR scan on inactive session"""
+        self.session.status = 'stopped'
+        self.session.save()
+        
+        data = {
+            'qr_token': 'test_token_1',
+            'student_id': self.student.student_id
+        }
+        response = self.client.post(self.qr_scan_url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class TwoFactorAttendanceTestCase(APITestCase):
+    """Test 2FA attendance (RFID + QR)"""
+    
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='student@test.com',
+            email='student@test.com',
+            password='TestPass123!'
+        )
+        self.teacher = Teacher.objects.create(
+            teacher_name='Test Teacher',
+            email='teacher@test.com',
+            rfid='RFID001'
+        )
+        self.course = Course.objects.create(course_name='Test Course')
+        self.student = Student.objects.create(
+            user=self.user,
+            student_name='Test Student',
+            email='student@test.com',
+            rfid='RFID_STUDENT_1',
+            year=1,
+            dept='CS',
+            section='A'
+        )
+        self.session = AttendanceSession.objects.create(
+            teacher=self.teacher,
+            course=self.course,
+            section='A',
+            year=1,
+            qr_code_token='test_token_1',
+            status='active'
+        )
+        
+        self.client.force_authenticate(user=self.user)
+        self.rfid_scan_url = reverse('rfid-scan')
+        self.qr_scan_url = reverse('qr-scan')
+    
+    def test_both_scans_marks_present(self):
+        """Test that both RFID and QR scans mark student as present"""
+        # First scan RFID
+        rfid_data = {
+            'rfid': 'RFID_STUDENT_1',
+            'session_id': self.session.id
+        }
+        rfid_response = self.client.post(self.rfid_scan_url, rfid_data, format='json')
+        self.assertEqual(rfid_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(rfid_response.data['is_present'])
+        
+        # Then scan QR
+        qr_data = {
+            'qr_token': 'test_token_1',
+            'student_id': self.student.student_id
+        }
+        qr_response = self.client.post(self.qr_scan_url, qr_data, format='json')
+        self.assertEqual(qr_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(qr_response.data['is_present'])
+        
+        # Verify record shows present
+        record = AttendanceRecord.objects.get(session=self.session, student=self.student)
+        self.assertTrue(record.rfid_scanned)
+        self.assertTrue(record.qr_scanned)
+        self.assertTrue(record.is_present)
+        self.assertIsNotNone(record.marked_present_at)
+        
+        # Verify StudentCourse was updated
+        student_course = StudentCourse.objects.get(
+            student=self.student,
+            course=self.course,
+            teacher=self.teacher
+        )
+        self.assertIsNotNone(student_course.classes_attended)
+        self.assertIn(self.session.started_at.strftime('%Y-%m-%d'), student_course.classes_attended)
+    
+    def test_qr_then_rfid_marks_present(self):
+        """Test that scanning QR first then RFID also marks present"""
+        # First scan QR
+        qr_data = {
+            'qr_token': 'test_token_1',
+            'student_id': self.student.student_id
+        }
+        qr_response = self.client.post(self.qr_scan_url, qr_data, format='json')
+        self.assertEqual(qr_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(qr_response.data['is_present'])
+        
+        # Then scan RFID
+        rfid_data = {
+            'rfid': 'RFID_STUDENT_1',
+            'session_id': self.session.id
+        }
+        rfid_response = self.client.post(self.rfid_scan_url, rfid_data, format='json')
+        self.assertEqual(rfid_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(rfid_response.data['is_present'])
+        
+        # Verify record shows present
+        record = AttendanceRecord.objects.get(session=self.session, student=self.student)
+        self.assertTrue(record.is_present)
+    
+    def test_only_rfid_does_not_mark_present(self):
+        """Test that only RFID scan does not mark student as present"""
+        rfid_data = {
+            'rfid': 'RFID_STUDENT_1',
+            'session_id': self.session.id
+        }
+        response = self.client.post(self.rfid_scan_url, rfid_data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['is_present'])
+        
+        # Verify no StudentCourse was created
+        self.assertFalse(StudentCourse.objects.filter(
+            student=self.student,
+            course=self.course,
+            teacher=self.teacher
+        ).exists())
+    
+    def test_only_qr_does_not_mark_present(self):
+        """Test that only QR scan does not mark student as present"""
+        qr_data = {
+            'qr_token': 'test_token_1',
+            'student_id': self.student.student_id
+        }
+        response = self.client.post(self.qr_scan_url, qr_data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['is_present'])
+        
+        # Verify no StudentCourse was created
+        self.assertFalse(StudentCourse.objects.filter(
+            student=self.student,
+            course=self.course,
+            teacher=self.teacher
+        ).exists())
+    
+    def test_neither_scan_no_attendance(self):
+        """Test that no scans means no attendance record"""
+        # Verify no record exists
+        self.assertFalse(AttendanceRecord.objects.filter(
+            session=self.session,
+            student=self.student
+        ).exists())
+
+
+class AttendanceSessionStatisticsTestCase(APITestCase):
+    """Test attendance statistics endpoint"""
+    
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='teacher@test.com',
+            email='teacher@test.com',
+            password='TestPass123!'
+        )
+        self.teacher = Teacher.objects.create(
+            user=self.user,
+            teacher_name='Test Teacher',
+            email='teacher@test.com',
+            rfid='RFID001'
+        )
+        self.course = Course.objects.create(course_name='Test Course')
+        self.session = AttendanceSession.objects.create(
+            teacher=self.teacher,
+            course=self.course,
+            section='A',
+            year=1,
+            qr_code_token='test_token_1',
+            status='active'
+        )
+        
+        # Create students
+        self.student1 = Student.objects.create(
+            student_name='Student 1',
+            email='student1@test.com',
+            rfid='RFID_1',
+            year=1, dept='CS', section='A'
+        )
+        self.student2 = Student.objects.create(
+            student_name='Student 2',
+            email='student2@test.com',
+            rfid='RFID_2',
+            year=1, dept='CS', section='A'
+        )
+        self.student3 = Student.objects.create(
+            student_name='Student 3',
+            email='student3@test.com',
+            rfid='RFID_3',
+            year=1, dept='CS', section='A'
+        )
+        
+        self.client.force_authenticate(user=self.user)
+    
+    def test_attendance_statistics(self):
+        """Test getting attendance statistics for a session"""
+        # Create different attendance scenarios
+        # Student 1: Both RFID and QR (present)
+        AttendanceRecord.objects.create(
+            session=self.session,
+            student=self.student1,
+            rfid_scanned=True,
+            qr_scanned=True,
+            is_present=True
+        )
+        
+        # Student 2: Only RFID (not present)
+        AttendanceRecord.objects.create(
+            session=self.session,
+            student=self.student2,
+            rfid_scanned=True,
+            qr_scanned=False,
+            is_present=False
+        )
+        
+        # Student 3: Only QR (not present)
+        AttendanceRecord.objects.create(
+            session=self.session,
+            student=self.student3,
+            rfid_scanned=False,
+            qr_scanned=True,
+            is_present=False
+        )
+        
+        attendance_url = reverse('attendancesession-attendance', args=[self.session.id])
+        response = self.client.get(attendance_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['statistics']['total_students'], 3)
+        self.assertEqual(response.data['statistics']['present'], 1)
+        self.assertEqual(response.data['statistics']['absent'], 2)
+        self.assertEqual(response.data['statistics']['rfid_only'], 1)
+        self.assertEqual(response.data['statistics']['qr_only'], 1)
+
 

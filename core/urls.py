@@ -24,7 +24,11 @@ from .views import (
     ClassViewSet,
     TaughtCourseViewSet,
     StudentCourseViewSet,
-    UpdateAttendanceRequestViewSet
+    UpdateAttendanceRequestViewSet,
+    AttendanceSessionViewSet,
+    AttendanceRecordViewSet,
+    RFIDScanView,
+    QRScanView
 )
 
 # Create a router for CRUD ViewSets
@@ -37,6 +41,8 @@ router.register(r'classes', ClassViewSet, basename='class')
 router.register(r'taught-courses', TaughtCourseViewSet, basename='taughtcourse')
 router.register(r'student-courses', StudentCourseViewSet, basename='studentcourse')
 router.register(r'update-attendance-requests', UpdateAttendanceRequestViewSet, basename='updateattendancerequest')
+router.register(r'attendance-sessions', AttendanceSessionViewSet, basename='attendancesession')
+router.register(r'attendance-records', AttendanceRecordViewSet, basename='attendancerecord')
 
 urlpatterns = [
     # CRUD API endpoints (from router)
@@ -49,6 +55,10 @@ urlpatterns = [
     path('update-attendance-requests/<int:pk>/reject/', 
          UpdateAttendanceRequestViewSet.as_view({'post': 'reject'}), 
          name='updateattendancerequest-reject'),
+    
+    # Attendance scanning endpoints
+    path('attendance/rfid-scan/', RFIDScanView.as_view(), name='rfid-scan'),
+    path('attendance/qr-scan/', QRScanView.as_view(), name='qr-scan'),
     
     # API Registration endpoints
     path('auth/register/student/', StudentRegistrationView.as_view(), name='student-register'),
