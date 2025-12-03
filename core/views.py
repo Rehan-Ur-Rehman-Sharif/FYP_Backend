@@ -339,17 +339,17 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         # Generate a unique QR code token
         qr_token = secrets.token_urlsafe(32)
         
-        # Create the session
-        data = request.data.copy()
-        data['qr_code_token'] = qr_token
-        data['status'] = 'active'
-        
-        serializer = self.get_serializer(data=data)
+        # Create the session without the token first
+        serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            session = serializer.save()
+            # Save the session and set the token
+            session = serializer.save(qr_code_token=qr_token, status='active')
+            
+            # Return the updated serializer data
+            response_serializer = self.get_serializer(session)
             return Response({
                 'message': 'Attendance session started successfully',
-                'session': serializer.data
+                'session': response_serializer.data
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
