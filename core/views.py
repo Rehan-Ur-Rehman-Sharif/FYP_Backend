@@ -5,18 +5,283 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from rest_framework import status, generics
+from rest_framework import status, generics, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import (
     StudentRegistrationSerializer,
     TeacherRegistrationSerializer,
     ManagementRegistrationSerializer,
-    LoginSerializer
+    LoginSerializer,
+    StudentSerializer,
+    TeacherSerializer,
+    ManagementSerializer,
+    CourseSerializer,
+    ClassSerializer,
+    TaughtCourseSerializer,
+    StudentCourseSerializer,
+    UpdateAttendanceRequestSerializer
 )
-from .models import Student, Teacher, Management, StudentCourse, TaughtCourse
+from .models import Student, Teacher, Management, StudentCourse, TaughtCourse, Course, Class, UpdateAttendanceRequest
+
+
+# ============ CRUD ViewSets for all models ============
+
+class StudentViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Student model providing CRUD operations.
+    - GET /students/ - List all students
+    - POST /students/ - Create a student (use registration for new users)
+    - GET /students/{id}/ - Retrieve a student
+    - PUT /students/{id}/ - Update a student
+    - PATCH /students/{id}/ - Partial update a student
+    - DELETE /students/{id}/ - Delete a student
+    """
+    queryset = Student.objects.all()
+    serializer_class = StudentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = self.queryset.all()
+        # Optional filters
+        year = self.request.query_params.get('year')
+        dept = self.request.query_params.get('dept')
+        section = self.request.query_params.get('section')
+        if year:
+            queryset = queryset.filter(year=year)
+        if dept:
+            queryset = queryset.filter(dept=dept)
+        if section:
+            queryset = queryset.filter(section=section)
+        return queryset
+
+
+class TeacherViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Teacher model providing CRUD operations.
+    - GET /teachers/ - List all teachers
+    - POST /teachers/ - Create a teacher (use registration for new users)
+    - GET /teachers/{id}/ - Retrieve a teacher
+    - PUT /teachers/{id}/ - Update a teacher
+    - PATCH /teachers/{id}/ - Partial update a teacher
+    - DELETE /teachers/{id}/ - Delete a teacher
+    """
+    queryset = Teacher.objects.all()
+    serializer_class = TeacherSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class ManagementViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Management model providing CRUD operations.
+    - GET /management/ - List all management users
+    - POST /management/ - Create a management user (use registration for new users)
+    - GET /management/{id}/ - Retrieve a management user
+    - PUT /management/{id}/ - Update a management user
+    - PATCH /management/{id}/ - Partial update a management user
+    - DELETE /management/{id}/ - Delete a management user
+    """
+    queryset = Management.objects.all()
+    serializer_class = ManagementSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class CourseViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Course model providing CRUD operations.
+    - GET /courses/ - List all courses
+    - POST /courses/ - Create a course
+    - GET /courses/{id}/ - Retrieve a course
+    - PUT /courses/{id}/ - Update a course
+    - PATCH /courses/{id}/ - Partial update a course
+    - DELETE /courses/{id}/ - Delete a course
+    """
+    queryset = Course.objects.all()
+    serializer_class = CourseSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class ClassViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Class (Classroom) model providing CRUD operations.
+    - GET /classes/ - List all classes
+    - POST /classes/ - Create a class
+    - GET /classes/{id}/ - Retrieve a class
+    - PUT /classes/{id}/ - Update a class
+    - PATCH /classes/{id}/ - Partial update a class
+    - DELETE /classes/{id}/ - Delete a class
+    """
+    queryset = Class.objects.all()
+    serializer_class = ClassSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class TaughtCourseViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for TaughtCourse model providing CRUD operations.
+    - GET /taught-courses/ - List all taught courses
+    - POST /taught-courses/ - Create a taught course
+    - GET /taught-courses/{id}/ - Retrieve a taught course
+    - PUT /taught-courses/{id}/ - Update a taught course
+    - PATCH /taught-courses/{id}/ - Partial update a taught course
+    - DELETE /taught-courses/{id}/ - Delete a taught course
+    """
+    queryset = TaughtCourse.objects.all()
+    serializer_class = TaughtCourseSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = self.queryset.all()
+        # Optional filters
+        course_id = self.request.query_params.get('course')
+        teacher_id = self.request.query_params.get('teacher')
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        if teacher_id:
+            queryset = queryset.filter(teacher_id=teacher_id)
+        return queryset
+
+
+class StudentCourseViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for StudentCourse model providing CRUD operations.
+    - GET /student-courses/ - List all student courses
+    - POST /student-courses/ - Create a student course
+    - GET /student-courses/{id}/ - Retrieve a student course
+    - PUT /student-courses/{id}/ - Update a student course
+    - PATCH /student-courses/{id}/ - Partial update a student course
+    - DELETE /student-courses/{id}/ - Delete a student course
+    """
+    queryset = StudentCourse.objects.all()
+    serializer_class = StudentCourseSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = self.queryset.all()
+        # Optional filters
+        student_id = self.request.query_params.get('student')
+        course_id = self.request.query_params.get('course')
+        teacher_id = self.request.query_params.get('teacher')
+        if student_id:
+            queryset = queryset.filter(student_id=student_id)
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        if teacher_id:
+            queryset = queryset.filter(teacher_id=teacher_id)
+        return queryset
+
+
+class UpdateAttendanceRequestViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for UpdateAttendanceRequest model providing CRUD operations.
+    - GET /update-attendance-requests/ - List all update attendance requests
+    - POST /update-attendance-requests/ - Create an update attendance request (by teacher)
+    - GET /update-attendance-requests/{id}/ - Retrieve an update attendance request
+    - PUT /update-attendance-requests/{id}/ - Update an update attendance request
+    - PATCH /update-attendance-requests/{id}/ - Partial update an update attendance request
+    - DELETE /update-attendance-requests/{id}/ - Delete an update attendance request
+    - POST /update-attendance-requests/{id}/approve/ - Approve the request (by management)
+    - POST /update-attendance-requests/{id}/reject/ - Reject the request (by management)
+    """
+    queryset = UpdateAttendanceRequest.objects.all()
+    serializer_class = UpdateAttendanceRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = self.queryset
+        # Optional filters
+        teacher_id = self.request.query_params.get('teacher')
+        student_id = self.request.query_params.get('student')
+        course_id = self.request.query_params.get('course')
+        request_status = self.request.query_params.get('status')
+        if teacher_id:
+            queryset = queryset.filter(teacher_id=teacher_id)
+        if student_id:
+            queryset = queryset.filter(student_id=student_id)
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        if request_status:
+            queryset = queryset.filter(status=request_status)
+        return queryset
+
+    def _process_request(self, request, pk, approve):
+        """Helper method to approve or reject a request"""
+        from django.utils import timezone
+        from django.http import Http404
+
+        try:
+            attendance_request = self.get_object()
+        except Http404:
+            return Response(
+                {'error': 'Update attendance request not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if attendance_request.status != 'pending':
+            return Response(
+                {'error': f'Request has already been {attendance_request.status}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get management user
+        try:
+            management = Management.objects.get(user=request.user)
+        except Management.DoesNotExist:
+            return Response(
+                {'error': 'Only management users can process attendance requests'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if approve:
+            # Approve: Update the student's attendance in the StudentCourse
+            try:
+                student_course = StudentCourse.objects.get(
+                    student=attendance_request.student,
+                    course=attendance_request.course,
+                    teacher=attendance_request.teacher
+                )
+                # Append the new classes to the existing attendance
+                if student_course.classes_attended:
+                    student_course.classes_attended = f"{student_course.classes_attended}, {attendance_request.classes_to_add}"
+                else:
+                    student_course.classes_attended = attendance_request.classes_to_add
+                student_course.save()
+            except StudentCourse.DoesNotExist:
+                # Create new StudentCourse record if it doesn't exist
+                StudentCourse.objects.create(
+                    student=attendance_request.student,
+                    course=attendance_request.course,
+                    teacher=attendance_request.teacher,
+                    classes_attended=attendance_request.classes_to_add
+                )
+            attendance_request.status = 'approved'
+            message = 'Attendance request approved and attendance updated'
+        else:
+            attendance_request.status = 'rejected'
+            message = 'Attendance request rejected'
+
+        attendance_request.processed_at = timezone.now()
+        attendance_request.processed_by = management
+        attendance_request.save()
+
+        serializer = self.get_serializer(attendance_request)
+        return Response({
+            'message': message,
+            'request': serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def approve(self, request, pk=None):
+        """Approve the attendance update request"""
+        return self._process_request(request, pk, approve=True)
+
+    def reject(self, request, pk=None):
+        """Reject the attendance update request"""
+        return self._process_request(request, pk, approve=False)
+
+
+# ============ Registration Views ============
 
 
 class StudentRegistrationView(generics.CreateAPIView):

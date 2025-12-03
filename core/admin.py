@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib import admin
-from .models import Class, Student, Management, Teacher, Course, TaughtCourse, StudentCourse
+from .models import Class, Student, Management, Teacher, Course, TaughtCourse, StudentCourse, UpdateAttendanceRequest
 
 # Register your models here.
 @admin.register(Class)
@@ -63,3 +63,26 @@ class StudentCourseAdmin(admin.ModelAdmin):
     list_display = ('id', 'student', 'course', 'teacher', 'classes_attended')
     list_filter = ('course', 'teacher')
     search_fields = ('student__student_name', 'course__course_name', 'teacher__teacher_name')
+
+
+class UpdateAttendanceRequestAdminForm(forms.ModelForm):
+    class Meta:
+        model = UpdateAttendanceRequest
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['teacher'].empty_label = "---Select Teacher---"
+        self.fields['student'].empty_label = "---Select Student---"
+        self.fields['course'].empty_label = "---Select Course---"
+        if 'processed_by' in self.fields:
+            self.fields['processed_by'].empty_label = "---Select Management---"
+
+
+@admin.register(UpdateAttendanceRequest)
+class UpdateAttendanceRequestAdmin(admin.ModelAdmin):
+    form = UpdateAttendanceRequestAdminForm
+    list_display = ('id', 'teacher', 'student', 'course', 'classes_to_add', 'status', 'requested_at', 'processed_by')
+    list_filter = ('status', 'teacher', 'course', 'requested_at')
+    search_fields = ('teacher__teacher_name', 'student__student_name', 'course__course_name', 'reason')
+    readonly_fields = ('requested_at', 'processed_at')
