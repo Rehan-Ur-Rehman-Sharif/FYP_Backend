@@ -56,6 +56,8 @@ class TaughtCourse(models.Model):
     course = models.ForeignKey('Course', on_delete=models.CASCADE, related_name='taught_courses')
     teacher = models.ForeignKey('Teacher', on_delete=models.CASCADE, related_name='taught_courses')
     classes_taken = models.CharField(max_length=255)  # e.g., "Class A, Class B"
+    section = models.CharField(max_length=10, blank=True)  # e.g., A, B, C
+    year = models.IntegerField(null=True, blank=True)  # e.g., 1, 2, 3, 4
 
     def __str__(self):
         return f"{self.teacher} teaches {self.course}"
@@ -97,3 +99,51 @@ class UpdateAttendanceRequest(models.Model):
 
     class Meta:
         ordering = ['-requested_at']
+
+
+class AttendanceSession(models.Model):
+    """
+    Model for attendance sessions started by teachers.
+    Teachers can start/stop sessions for a specific course, section, and year.
+    """
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('stopped', 'Stopped'),
+    ]
+
+    teacher = models.ForeignKey('Teacher', on_delete=models.CASCADE, related_name='attendance_sessions')
+    course = models.ForeignKey('Course', on_delete=models.CASCADE, related_name='attendance_sessions')
+    section = models.CharField(max_length=10)  # e.g., A, B, C
+    year = models.IntegerField()  # e.g., 1, 2, 3, 4
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active')
+    qr_code_token = models.CharField(max_length=255, unique=True)  # Token for QR code validation
+    started_at = models.DateTimeField(auto_now_add=True)
+    stopped_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.teacher} - {self.course} - {self.section} - Year {self.year} - {self.status}"
+
+    class Meta:
+        ordering = ['-started_at']
+
+
+class AttendanceRecord(models.Model):
+    """
+    Model for tracking 2FA attendance (RFID + QR code).
+    Students must scan both RFID and QR code to mark attendance.
+    """
+    session = models.ForeignKey('AttendanceSession', on_delete=models.CASCADE, related_name='attendance_records')
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='attendance_records')
+    rfid_scanned = models.BooleanField(default=False)
+    rfid_scanned_at = models.DateTimeField(null=True, blank=True)
+    qr_scanned = models.BooleanField(default=False)
+    qr_scanned_at = models.DateTimeField(null=True, blank=True)
+    is_present = models.BooleanField(default=False)  # True only when both RFID and QR are scanned
+    marked_present_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.student} - {self.session} - Present: {self.is_present}"
+
+    class Meta:
+        unique_together = ['session', 'student']
+        ordering = ['-marked_present_at']
