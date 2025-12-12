@@ -20,7 +20,7 @@ DELETE FROM auth_user;
 ALTER SEQUENCE core_student_student_id_seq RESTART WITH 1;
 ALTER SEQUENCE core_teacher_teacher_id_seq RESTART WITH 1;
 ALTER SEQUENCE core_course_course_id_seq RESTART WITH 1;
-ALTER SEQUENCE core_management_management_id_seq RESTART WITH 1;
+ALTER SEQUENCE "core_management_Management_id_seq" RESTART WITH 1;
 ALTER SEQUENCE core_taughtcourse_id_seq RESTART WITH 1;
 ALTER SEQUENCE core_studentcourse_id_seq RESTART WITH 1;
 ALTER SEQUENCE core_class_classroom_id_seq RESTART WITH 1;
@@ -73,7 +73,7 @@ INSERT INTO core_teacher (teacher_id, user_id, teacher_name, email, rfid) VALUES
 (6, 11, 'Prof. Imran Siddiqui', 'imran.siddiqui@university.edu', 'RFID-TCH-006');
 
 -- STEP 7: INSERT MANAGEMENT
-INSERT INTO core_management (management_id, user_id, management_name, email) VALUES
+INSERT INTO core_management ("Management_id", user_id, "Management_name", email) VALUES
 (1, 12, 'Dean Rashid', 'dean.rashid@university.edu'),
 (2, 13, 'HOD Kamran', 'hod.kamran@university.edu');
 

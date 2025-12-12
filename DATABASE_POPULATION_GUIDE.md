@@ -131,6 +131,7 @@ SELECT COUNT(*) as user_count FROM auth_user;            -- Should be 13
 - Teachers have `is_staff=True` to access admin panel
 - Management users have `is_superuser=True` for full system access
 - The script resets all sequence counters to ensure proper auto-increment behavior
+- **Note**: The Management model has field names with capital M (`Management_id`, `Management_name`) due to Django model naming. These are quoted in SQL statements.
 
 ## Troubleshooting
 
