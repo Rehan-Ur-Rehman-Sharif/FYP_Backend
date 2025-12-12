@@ -240,6 +240,17 @@
     }
     const csrftoken = getCookie('csrftoken');
 
+    // HTML escape function to prevent XSS
+    function escapeHtml(unsafe) {
+        if (!unsafe) return '';
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
     function showSection(section) {
         // Hide all sections
         document.querySelectorAll('.management-section').forEach(s => s.style.display = 'none');
@@ -261,16 +272,17 @@
         
         let html = '<table><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Year</th><th>Dept</th><th>Section</th><th>Actions</th></tr></thead><tbody>';
         students.forEach(s => {
+            const escapedName = escapeHtml(s.student_name);
             html += `<tr>
                 <td>${s.student_id}</td>
-                <td>${s.student_name}</td>
+                <td>${escapedName}</td>
                 <td>${s.email || 'N/A'}</td>
                 <td>${s.year}</td>
                 <td>${s.dept}</td>
                 <td>${s.section}</td>
                 <td class="action-btns">
-                    <button class="btn btn-warning btn-sm" onclick="editStudent(${s.student_id})">Edit</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteStudent(${s.student_id}, '${s.student_name}')">Delete</button>
+                    <button class="btn btn-warning btn-sm" data-action="edit" data-type="student" data-id="${s.student_id}">Edit</button>
+                    <button class="btn btn-danger btn-sm" data-action="delete" data-type="student" data-id="${s.student_id}" data-name="${escapedName}">Delete</button>
                 </td>
             </tr>`;
         });
@@ -284,14 +296,15 @@
         
         let html = '<table><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>RFID</th><th>Actions</th></tr></thead><tbody>';
         teachers.forEach(t => {
+            const escapedName = escapeHtml(t.teacher_name);
             html += `<tr>
                 <td>${t.teacher_id}</td>
-                <td>${t.teacher_name}</td>
+                <td>${escapedName}</td>
                 <td>${t.email || 'N/A'}</td>
                 <td>${t.rfid}</td>
                 <td class="action-btns">
-                    <button class="btn btn-warning btn-sm" onclick="editTeacher(${t.teacher_id})">Edit</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteTeacher(${t.teacher_id}, '${t.teacher_name}')">Delete</button>
+                    <button class="btn btn-warning btn-sm" data-action="edit" data-type="teacher" data-id="${t.teacher_id}">Edit</button>
+                    <button class="btn btn-danger btn-sm" data-action="delete" data-type="teacher" data-id="${t.teacher_id}" data-name="${escapedName}">Delete</button>
                 </td>
             </tr>`;
         });
@@ -305,12 +318,13 @@
         
         let html = '<table><thead><tr><th>ID</th><th>Course Name</th><th>Actions</th></tr></thead><tbody>';
         courses.forEach(c => {
+            const escapedName = escapeHtml(c.course_name);
             html += `<tr>
                 <td>${c.course_id}</td>
-                <td>${c.course_name}</td>
+                <td>${escapedName}</td>
                 <td class="action-btns">
-                    <button class="btn btn-warning btn-sm" onclick="editCourse(${c.course_id})">Edit</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteCourse(${c.course_id}, '${c.course_name}')">Delete</button>
+                    <button class="btn btn-warning btn-sm" data-action="edit" data-type="course" data-id="${c.course_id}">Edit</button>
+                    <button class="btn btn-danger btn-sm" data-action="delete" data-type="course" data-id="${c.course_id}" data-name="${escapedName}">Delete</button>
                 </td>
             </tr>`;
         });
@@ -326,13 +340,13 @@
         taughtCourses.forEach(tc => {
             html += `<tr>
                 <td>${tc.id}</td>
-                <td>${tc.course_name}</td>
-                <td>${tc.teacher_name}</td>
+                <td>${escapeHtml(tc.course_name)}</td>
+                <td>${escapeHtml(tc.teacher_name)}</td>
                 <td>${tc.section || 'N/A'}</td>
                 <td>${tc.year || 'N/A'}</td>
                 <td class="action-btns">
-                    <button class="btn btn-warning btn-sm" onclick="editTaughtCourse(${tc.id})">Edit</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteTaughtCourse(${tc.id})">Delete</button>
+                    <button class="btn btn-warning btn-sm" data-action="edit" data-type="taught-course" data-id="${tc.id}">Edit</button>
+                    <button class="btn btn-danger btn-sm" data-action="delete" data-type="taught-course" data-id="${tc.id}">Delete</button>
                 </td>
             </tr>`;
         });
@@ -348,11 +362,11 @@
         studentCourses.forEach(sc => {
             html += `<tr>
                 <td>${sc.id}</td>
-                <td>${sc.student_name}</td>
-                <td>${sc.course_name}</td>
-                <td>${sc.teacher_name}</td>
+                <td>${escapeHtml(sc.student_name)}</td>
+                <td>${escapeHtml(sc.course_name)}</td>
+                <td>${escapeHtml(sc.teacher_name)}</td>
                 <td class="action-btns">
-                    <button class="btn btn-danger btn-sm" onclick="deleteStudentCourse(${sc.id})">Delete</button>
+                    <button class="btn btn-danger btn-sm" data-action="delete" data-type="student-course" data-id="${sc.id}">Delete</button>
                 </td>
             </tr>`;
         });
@@ -634,86 +648,6 @@
         }
     }
 
-    async function deleteStudent(id, name) {
-        if (!confirm(`Delete student "${name}"?`)) return;
-        
-        const response = await fetch(`/api/students/${id}/`, {
-            method: 'DELETE',
-            headers: {'X-CSRFToken': csrftoken}
-        });
-        
-        if (response.ok) {
-            alert('Student deleted successfully!');
-            loadStudents();
-        } else {
-            alert('Error deleting student');
-        }
-    }
-
-    async function deleteTeacher(id, name) {
-        if (!confirm(`Delete teacher "${name}"?`)) return;
-        
-        const response = await fetch(`/api/teachers/${id}/`, {
-            method: 'DELETE',
-            headers: {'X-CSRFToken': csrftoken}
-        });
-        
-        if (response.ok) {
-            alert('Teacher deleted successfully!');
-            loadTeachers();
-        } else {
-            alert('Error deleting teacher');
-        }
-    }
-
-    async function deleteCourse(id, name) {
-        if (!confirm(`Delete course "${name}"?`)) return;
-        
-        const response = await fetch(`/api/courses/${id}/`, {
-            method: 'DELETE',
-            headers: {'X-CSRFToken': csrftoken}
-        });
-        
-        if (response.ok) {
-            alert('Course deleted successfully!');
-            loadCourses();
-        } else {
-            alert('Error deleting course');
-        }
-    }
-
-    async function deleteTaughtCourse(id) {
-        if (!confirm(`Delete this taught course assignment?`)) return;
-        
-        const response = await fetch(`/api/taught-courses/${id}/`, {
-            method: 'DELETE',
-            headers: {'X-CSRFToken': csrftoken}
-        });
-        
-        if (response.ok) {
-            alert('Taught course deleted successfully!');
-            loadTaughtCourses();
-        } else {
-            alert('Error deleting taught course');
-        }
-    }
-
-    async function deleteStudentCourse(id) {
-        if (!confirm(`Delete this student enrollment?`)) return;
-        
-        const response = await fetch(`/api/student-courses/${id}/`, {
-            method: 'DELETE',
-            headers: {'X-CSRFToken': csrftoken}
-        });
-        
-        if (response.ok) {
-            alert('Student enrollment deleted successfully!');
-            loadStudentCourses();
-        } else {
-            alert('Error deleting student enrollment');
-        }
-    }
-
     // Edit functions (simplified - you can enhance these)
     async function editStudent(id) {
         alert('Edit functionality coming soon. Use delete and re-add for now.');
@@ -730,5 +664,50 @@
     async function editTaughtCourse(id) {
         alert('Edit functionality coming soon. Use delete and re-add for now.');
     }
+
+    // Event delegation for dynamically created buttons
+    document.addEventListener('click', async function(event) {
+        const target = event.target;
+        
+        if (target.getAttribute('data-action') === 'delete') {
+            const type = target.getAttribute('data-type');
+            const id = target.getAttribute('data-id');
+            const name = target.getAttribute('data-name') || 'this item';
+            
+            if (!confirm(`Delete ${type} "${name}"?`)) return;
+            
+            let endpoint = '';
+            if (type === 'student') endpoint = `/api/students/${id}/`;
+            else if (type === 'teacher') endpoint = `/api/teachers/${id}/`;
+            else if (type === 'course') endpoint = `/api/courses/${id}/`;
+            else if (type === 'taught-course') endpoint = `/api/taught-courses/${id}/`;
+            else if (type === 'student-course') endpoint = `/api/student-courses/${id}/`;
+            
+            const response = await fetch(endpoint, {
+                method: 'DELETE',
+                headers: {'X-CSRFToken': csrftoken}
+            });
+            
+            if (response.ok) {
+                alert(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully!`);
+                if (type === 'student') loadStudents();
+                else if (type === 'teacher') loadTeachers();
+                else if (type === 'course') loadCourses();
+                else if (type === 'taught-course') loadTaughtCourses();
+                else if (type === 'student-course') loadStudentCourses();
+            } else {
+                alert(`Error deleting ${type}`);
+            }
+        }
+        
+        if (target.getAttribute('data-action') === 'edit') {
+            const type = target.getAttribute('data-type');
+            const id = target.getAttribute('data-id');
+            if (type === 'student') editStudent(id);
+            else if (type === 'teacher') editTeacher(id);
+            else if (type === 'course') editCourse(id);
+            else if (type === 'taught-course') editTaughtCourse(id);
+        }
+    });
 </script>
 {% endblock %}

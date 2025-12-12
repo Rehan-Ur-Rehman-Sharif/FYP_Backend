@@ -111,30 +111,31 @@
                                 <span class="active-badge">Session Active</span>
                             {% endif %}
                         </div>
-                        <div style="font-size: 12px; color: #666;">
+                        <div style="font-size: 12px; color: #666;" data-section="{{ course.section }}" data-year="{{ course.year }}">
                             Section: {{ course.section }} | Year: {{ course.year }}
                         </div>
                         <div style="font-size: 12px; color: #666;">Classes Taken: {{ course.classes_taken }}</div>
+                        <div style="display: none;" data-course-id="{{ course.course_id }}"></div>
                     </div>
                     
                     <div class="session-controls">
                         {% if course.has_active_session %}
-                            <button class="btn btn-qr" onclick="toggleQR('{{ course.active_session_id }}', '{{ course.course_id }}')">
+                            <button class="btn btn-qr" data-session-id="{{ course.active_session_id }}" data-course-id="{{ course.course_id }}">
                                 Show QR Code
                             </button>
-                            <button class="btn btn-stop" onclick="stopSession('{{ course.active_session_id }}', '{{ course.course_name }}')">
+                            <button class="btn btn-stop" data-session-id="{{ course.active_session_id }}" data-course-name="{{ course.course_name }}">
                                 Stop Attendance Session
                             </button>
                             <div id="qr-{{ course.active_session_id }}" class="qr-container">
                                 <h3>QR Code for {{ course.course_name }}</h3>
                                 <img id="qr-img-{{ course.active_session_id }}" src="" alt="QR Code">
                                 <p style="font-size: 12px; color: #666;">Students scan this QR code to mark attendance</p>
-                                <button class="btn btn-stop" onclick="hideQR('{{ course.active_session_id }}')">
+                                <button class="btn btn-stop" data-session-id="{{ course.active_session_id }}" data-action="hide-qr">
                                     Hide QR Code
                                 </button>
                             </div>
                         {% else %}
-                            <button class="btn btn-start" onclick="startSession('{{ course.taught_course_id }}', '{{ course.course_name }}')">
+                            <button class="btn btn-start" data-taught-course-id="{{ course.taught_course_id }}" data-course-name="{{ course.course_name }}">
                                 Start Attendance Session
                             </button>
                         {% endif %}
@@ -165,105 +166,118 @@
     }
     const csrftoken = getCookie('csrftoken');
 
-    async function startSession(taughtCourseId, courseName) {
-        if (!confirm(`Start attendance session for ${courseName}?`)) return;
+    // Event delegation for all buttons
+    document.addEventListener('click', async function(event) {
+        const target = event.target;
         
-        try {
-            // Get the taught course details from the DOM
-            const courseElement = event.target.closest('.course-item');
-            const sectionText = courseElement.querySelector('div[style*="Section"]').textContent;
-            const section = sectionText.match(/Section: (\S+)/)[1];
-            const year = sectionText.match(/Year: (\S+)/)[1];
+        // Start session button
+        if (target.classList.contains('btn-start')) {
+            const courseName = target.getAttribute('data-course-name');
+            if (!confirm(`Start attendance session for ${courseName}?`)) return;
             
-            // Find the course ID from courses list
-            const courseId = event.target.closest('.course-item').querySelector('.btn-start').onclick.toString().match(/startSession\('(\d+)'/)[1];
+            const courseItem = target.closest('.course-item');
+            const sectionElem = courseItem.querySelector('[data-section]');
+            const yearElem = courseItem.querySelector('[data-year]');
+            const courseIdElem = courseItem.querySelector('[data-course-id]');
             
-            const response = await fetch('/api/attendance-sessions/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrftoken,
-                    'Authorization': 'Bearer ' + localStorage.getItem('access_token')
-                },
-                body: JSON.stringify({
-                    teacher: {{ teacher_id }},
-                    course: courseId,
-                    section: section === 'N/A' ? '' : section,
-                    year: year === 'N/A' ? null : parseInt(year)
-                })
-            });
-            
-            if (response.ok) {
-                alert('Attendance session started successfully!');
-                location.reload();
-            } else {
-                const data = await response.json();
-                alert('Error: ' + JSON.stringify(data));
+            if (!sectionElem || !yearElem || !courseIdElem) {
+                alert('Missing course information');
+                return;
             }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Failed to start session. Please try again.');
-        }
-    }
-
-    async function stopSession(sessionId, courseName) {
-        if (!confirm(`Stop attendance session for ${courseName}?`)) return;
-        
-        try {
-            const response = await fetch(`/api/attendance-sessions/${sessionId}/stop/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrftoken,
-                    'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+            
+            const section = sectionElem.getAttribute('data-section');
+            const year = yearElem.getAttribute('data-year');
+            const courseId = courseIdElem.getAttribute('data-course-id');
+            
+            try {
+                const response = await fetch('/api/attendance-sessions/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        teacher: {{ teacher_id }},
+                        course: parseInt(courseId),
+                        section: section === 'N/A' ? '' : section,
+                        year: year === 'N/A' ? null : parseInt(year)
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('Attendance session started successfully!');
+                    location.reload();
+                } else {
+                    const data = await response.json();
+                    alert('Error: ' + JSON.stringify(data));
                 }
-            });
-            
-            if (response.ok) {
-                alert('Attendance session stopped successfully!');
-                location.reload();
-            } else {
-                const data = await response.json();
-                alert('Error: ' + JSON.stringify(data));
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to start session. Please try again.');
             }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Failed to stop session. Please try again.');
         }
-    }
-
-    async function toggleQR(sessionId, courseId) {
-        const qrContainer = document.getElementById(`qr-${sessionId}`);
-        const qrImg = document.getElementById(`qr-img-${sessionId}`);
         
-        if (qrContainer.classList.contains('active')) {
+        // Stop session button
+        if (target.classList.contains('btn-stop') && target.getAttribute('data-session-id') && target.getAttribute('data-course-name')) {
+            const sessionId = target.getAttribute('data-session-id');
+            const courseName = target.getAttribute('data-course-name');
+            if (!confirm(`Stop attendance session for ${courseName}?`)) return;
+            
+            try {
+                const response = await fetch(`/api/attendance-sessions/${sessionId}/stop/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    }
+                });
+                
+                if (response.ok) {
+                    alert('Attendance session stopped successfully!');
+                    location.reload();
+                } else {
+                    const data = await response.json();
+                    alert('Error: ' + JSON.stringify(data));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to stop session. Please try again.');
+            }
+        }
+        
+        // Show QR button
+        if (target.classList.contains('btn-qr')) {
+            const sessionId = target.getAttribute('data-session-id');
+            const qrContainer = document.getElementById(`qr-${sessionId}`);
+            const qrImg = document.getElementById(`qr-img-${sessionId}`);
+            
+            if (qrContainer.classList.contains('active')) {
+                qrContainer.classList.remove('active');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/attendance-sessions/${sessionId}/qr/`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    qrImg.src = data.qr_code;
+                    qrContainer.classList.add('active');
+                } else {
+                    alert('Failed to load QR code');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to load QR code. Please try again.');
+            }
+        }
+        
+        // Hide QR button
+        if (target.classList.contains('btn-stop') && target.getAttribute('data-action') === 'hide-qr') {
+            const sessionId = target.getAttribute('data-session-id');
+            const qrContainer = document.getElementById(`qr-${sessionId}`);
             qrContainer.classList.remove('active');
-            return;
         }
-        
-        try {
-            const response = await fetch(`/api/attendance-sessions/${sessionId}/qr/`, {
-                headers: {
-                    'Authorization': 'Bearer ' + localStorage.getItem('access_token')
-                }
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                qrImg.src = data.qr_code;
-                qrContainer.classList.add('active');
-            } else {
-                alert('Failed to load QR code');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Failed to load QR code. Please try again.');
-        }
-    }
-
-    function hideQR(sessionId) {
-        const qrContainer = document.getElementById(`qr-${sessionId}`);
-        qrContainer.classList.remove('active');
-    }
+    });
 </script>
 {% endblock %}

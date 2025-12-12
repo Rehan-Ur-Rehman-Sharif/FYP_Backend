@@ -1094,7 +1094,7 @@ def student_dashboard(request):
         student = Student.objects.get(user=request.user)
         
         # Get course-wise attendance using AttendanceRecord for real-time updates
-        student_courses = StudentCourse.objects.filter(student=student).select_related('course', 'teacher')
+        student_courses = StudentCourse.objects.filter(student=student).select_related('course', 'teacher').prefetch_related('course__attendance_sessions')
         
         course_attendance = []
         total_attendance_sum = 0
