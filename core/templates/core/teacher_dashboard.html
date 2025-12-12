@@ -3,6 +3,77 @@
 {% block title %}Teacher Dashboard - Student Attendance Management System{% endblock %}
 
 {% block content %}
+<style>
+    .session-controls {
+        margin: 20px 0;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 5px;
+    }
+    .btn {
+        padding: 10px 20px;
+        margin: 5px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.3s;
+    }
+    .btn-start {
+        background: #28a745;
+        color: white;
+    }
+    .btn-start:hover {
+        background: #218838;
+    }
+    .btn-stop {
+        background: #dc3545;
+        color: white;
+    }
+    .btn-stop:hover {
+        background: #c82333;
+    }
+    .btn-qr {
+        background: #007bff;
+        color: white;
+    }
+    .btn-qr:hover {
+        background: #0056b3;
+    }
+    .qr-container {
+        margin: 15px 0;
+        padding: 15px;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        text-align: center;
+        display: none;
+    }
+    .qr-container.active {
+        display: block;
+    }
+    .qr-container img {
+        max-width: 300px;
+        margin: 10px 0;
+    }
+    .course-item {
+        margin: 10px 0;
+        padding: 15px;
+        background: white;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .active-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        background: #28a745;
+        color: white;
+        border-radius: 3px;
+        font-size: 12px;
+        margin-left: 10px;
+    }
+</style>
+
 <div class="dashboard-container">
     <div class="dashboard-header">
         <h1>Teacher Attendance Dashboard</h1>
@@ -30,18 +101,183 @@
     
     <div class="course-list">
         <h2>Courses You Teach</h2>
-        {% if courses %}
+        {% if has_courses %}
             {% for course in courses %}
                 <div class="course-item">
                     <div>
-                        <div class="course-name">{{ course.course_name }}</div>
+                        <div class="course-name">
+                            {{ course.course_name }}
+                            {% if course.has_active_session %}
+                                <span class="active-badge">Session Active</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 12px; color: #666;" data-section="{{ course.section }}" data-year="{{ course.year }}">
+                            Section: {{ course.section }} | Year: {{ course.year }}
+                        </div>
                         <div style="font-size: 12px; color: #666;">Classes Taken: {{ course.classes_taken }}</div>
+                        <div style="display: none;" data-course-id="{{ course.course_id }}"></div>
+                    </div>
+                    
+                    <div class="session-controls">
+                        {% if course.has_active_session %}
+                            <button class="btn btn-qr" data-session-id="{{ course.active_session_id }}" data-course-id="{{ course.course_id }}">
+                                Show QR Code
+                            </button>
+                            <button class="btn btn-stop" data-session-id="{{ course.active_session_id }}" data-course-name="{{ course.course_name }}">
+                                Stop Attendance Session
+                            </button>
+                            <div id="qr-{{ course.active_session_id }}" class="qr-container">
+                                <h3>QR Code for {{ course.course_name }}</h3>
+                                <img id="qr-img-{{ course.active_session_id }}" src="" alt="QR Code">
+                                <p style="font-size: 12px; color: #666;">Students scan this QR code to mark attendance</p>
+                                <button class="btn btn-stop" data-session-id="{{ course.active_session_id }}" data-action="hide-qr">
+                                    Hide QR Code
+                                </button>
+                            </div>
+                        {% else %}
+                            <button class="btn btn-start" data-taught-course-id="{{ course.taught_course_id }}" data-course-name="{{ course.course_name }}">
+                                Start Attendance Session
+                            </button>
+                        {% endif %}
                     </div>
                 </div>
             {% endfor %}
         {% else %}
-            <p style="text-align: center; color: #666;">No courses assigned yet.</p>
+            <p style="text-align: center; color: #666;">No courses assigned yet. Please contact administration to be assigned courses.</p>
         {% endif %}
     </div>
 </div>
+
+<script>
+    // Get CSRF token for POST requests
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    // Event delegation for all buttons
+    document.addEventListener('click', async function(event) {
+        const target = event.target;
+        
+        // Start session button
+        if (target.classList.contains('btn-start')) {
+            const courseName = target.getAttribute('data-course-name');
+            if (!confirm(`Start attendance session for ${courseName}?`)) return;
+            
+            const courseItem = target.closest('.course-item');
+            const sectionElem = courseItem.querySelector('[data-section]');
+            const yearElem = courseItem.querySelector('[data-year]');
+            const courseIdElem = courseItem.querySelector('[data-course-id]');
+            
+            if (!sectionElem || !yearElem || !courseIdElem) {
+                alert('Missing course information');
+                return;
+            }
+            
+            const section = sectionElem.getAttribute('data-section');
+            const year = yearElem.getAttribute('data-year');
+            const courseId = courseIdElem.getAttribute('data-course-id');
+            
+            try {
+                const response = await fetch('/api/attendance-sessions/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        teacher: {{ teacher_id }},
+                        course: parseInt(courseId),
+                        section: section === 'N/A' ? '' : section,
+                        year: year === 'N/A' ? null : parseInt(year)
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('Attendance session started successfully!');
+                    location.reload();
+                } else {
+                    const data = await response.json();
+                    alert('Error: ' + JSON.stringify(data));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to start session. Please try again.');
+            }
+        }
+        
+        // Stop session button
+        if (target.classList.contains('btn-stop') && target.getAttribute('data-session-id') && target.getAttribute('data-course-name')) {
+            const sessionId = target.getAttribute('data-session-id');
+            const courseName = target.getAttribute('data-course-name');
+            if (!confirm(`Stop attendance session for ${courseName}?`)) return;
+            
+            try {
+                const response = await fetch(`/api/attendance-sessions/${sessionId}/stop/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    }
+                });
+                
+                if (response.ok) {
+                    alert('Attendance session stopped successfully!');
+                    location.reload();
+                } else {
+                    const data = await response.json();
+                    alert('Error: ' + JSON.stringify(data));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to stop session. Please try again.');
+            }
+        }
+        
+        // Show QR button
+        if (target.classList.contains('btn-qr')) {
+            const sessionId = target.getAttribute('data-session-id');
+            const qrContainer = document.getElementById(`qr-${sessionId}`);
+            const qrImg = document.getElementById(`qr-img-${sessionId}`);
+            
+            if (qrContainer.classList.contains('active')) {
+                qrContainer.classList.remove('active');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/attendance-sessions/${sessionId}/qr/`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    qrImg.src = data.qr_code;
+                    qrContainer.classList.add('active');
+                } else {
+                    alert('Failed to load QR code');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to load QR code. Please try again.');
+            }
+        }
+        
+        // Hide QR button
+        if (target.classList.contains('btn-stop') && target.getAttribute('data-action') === 'hide-qr') {
+            const sessionId = target.getAttribute('data-session-id');
+            const qrContainer = document.getElementById(`qr-${sessionId}`);
+            qrContainer.classList.remove('active');
+        }
+    });
+</script>
 {% endblock %}
