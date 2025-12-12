@@ -1088,41 +1088,63 @@ def management_register_page(request):
 @login_required
 def student_dashboard(request):
     """
-    Dashboard view for students with attendance information
+    Dashboard view for students with real-time attendance information
     """
     try:
         student = Student.objects.get(user=request.user)
         
-        # Get course-wise attendance
+        # Get course-wise attendance using AttendanceRecord for real-time updates
         student_courses = StudentCourse.objects.filter(student=student).select_related('course', 'teacher')
         
         course_attendance = []
+        total_attendance_sum = 0
+        total_courses_with_sessions = 0
+        
         for sc in student_courses:
-            # Calculate attendance percentage for this course
-            taught_course = TaughtCourse.objects.filter(
-                course=sc.course, 
-                teacher=sc.teacher
-            ).first()
+            # Get all sessions for this course
+            all_sessions = AttendanceSession.objects.filter(
+                course=sc.course,
+                teacher=sc.teacher,
+                section=student.section,
+                year=student.year
+            )
             
-            if taught_course:
-                # Parse classes attended and classes taken
-                classes_attended = len(sc.classes_attended.split(',')) if sc.classes_attended else 0
-                classes_taken = len(taught_course.classes_taken.split(',')) if taught_course.classes_taken else 0
-                
-                attendance_percentage = (classes_attended / classes_taken * 100) if classes_taken > 0 else 0
+            # Count total sessions (including active ones)
+            total_sessions = all_sessions.count()
+            
+            # Get attendance records for this student in these sessions
+            attended_sessions = AttendanceRecord.objects.filter(
+                student=student,
+                session__in=all_sessions,
+                is_present=True
+            ).count()
+            
+            # Calculate attendance percentage
+            if total_sessions > 0:
+                attendance_percentage = (attended_sessions / total_sessions * 100)
+                total_attendance_sum += attendance_percentage
+                total_courses_with_sessions += 1
             else:
                 attendance_percentage = 0
             
             course_attendance.append({
                 'course_name': sc.course.course_name,
                 'teacher_name': sc.teacher.teacher_name,
-                'attendance': round(attendance_percentage, 1)
+                'attendance': round(attendance_percentage, 1),
+                'attended': attended_sessions,
+                'total': total_sessions
             })
+        
+        # Calculate overall attendance
+        if total_courses_with_sessions > 0:
+            overall_attendance = total_attendance_sum / total_courses_with_sessions
+        else:
+            overall_attendance = 0
         
         context = {
             'student_name': student.student_name,
             'student_id': student.student_id,
-            'overall_attendance': round(student.overall_attendance, 1),
+            'overall_attendance': round(overall_attendance, 1),
             'total_courses': len(course_attendance),
             'course_attendance': course_attendance,
         }
@@ -1136,20 +1158,41 @@ def student_dashboard(request):
 @login_required
 def teacher_dashboard(request):
     """
-    Dashboard view for teachers
+    Dashboard view for teachers with attendance session management
     """
     try:
         teacher = Teacher.objects.get(user=request.user)
         
-        # Get courses taught by this teacher
+        # Get courses taught by this teacher with section and year info
         taught_courses = TaughtCourse.objects.filter(teacher=teacher).select_related('course')
         
         courses = []
         for tc in taught_courses:
+            # Get active session for this course
+            active_session = AttendanceSession.objects.filter(
+                teacher=teacher,
+                course=tc.course,
+                section=tc.section,
+                year=tc.year,
+                status='active'
+            ).first()
+            
             courses.append({
+                'taught_course_id': tc.id,
+                'course_id': tc.course.course_id,
                 'course_name': tc.course.course_name,
-                'classes_taken': tc.classes_taken if tc.classes_taken else 'None'
+                'section': tc.section if tc.section else 'N/A',
+                'year': tc.year if tc.year else 'N/A',
+                'classes_taken': tc.classes_taken if tc.classes_taken else 'None',
+                'has_active_session': active_session is not None,
+                'active_session_id': active_session.id if active_session else None
             })
+        
+        # Get all active sessions for this teacher
+        active_sessions = AttendanceSession.objects.filter(
+            teacher=teacher,
+            status='active'
+        ).select_related('course')
         
         context = {
             'teacher_name': teacher.teacher_name,
@@ -1157,6 +1200,8 @@ def teacher_dashboard(request):
             'email': teacher.email,
             'total_courses': len(courses),
             'courses': courses,
+            'active_sessions': active_sessions,
+            'has_courses': len(courses) > 0,
         }
         
         return render(request, 'core/teacher_dashboard.html', context)
