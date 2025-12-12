@@ -5,11 +5,18 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.utils import timezone
+from django.http import HttpResponse
 from rest_framework import status, generics, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.decorators import action
 from rest_framework_simplejwt.tokens import RefreshToken
+import qrcode
+import io
+import base64
+import secrets
 from .serializers import (
     StudentRegistrationSerializer,
     TeacherRegistrationSerializer,
@@ -22,9 +29,16 @@ from .serializers import (
     ClassSerializer,
     TaughtCourseSerializer,
     StudentCourseSerializer,
-    UpdateAttendanceRequestSerializer
+    UpdateAttendanceRequestSerializer,
+    AttendanceSessionSerializer,
+    AttendanceRecordSerializer,
+    RFIDScanSerializer,
+    QRScanSerializer
 )
-from .models import Student, Teacher, Management, StudentCourse, TaughtCourse, Course, Class, UpdateAttendanceRequest
+from .models import (
+    Student, Teacher, Management, StudentCourse, TaughtCourse, Course, Class,
+    UpdateAttendanceRequest, AttendanceSession, AttendanceRecord
+)
 
 
 # ============ CRUD ViewSets for all models ============
@@ -279,6 +293,376 @@ class UpdateAttendanceRequestViewSet(viewsets.ModelViewSet):
     def reject(self, request, pk=None):
         """Reject the attendance update request"""
         return self._process_request(request, pk, approve=False)
+
+
+class AttendanceSessionViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for AttendanceSession model providing CRUD operations and session management.
+    - GET /attendance-sessions/ - List all attendance sessions
+    - POST /attendance-sessions/ - Create/start an attendance session
+    - GET /attendance-sessions/{id}/ - Retrieve an attendance session
+    - PUT /attendance-sessions/{id}/ - Update an attendance session
+    - PATCH /attendance-sessions/{id}/ - Partial update an attendance session
+    - DELETE /attendance-sessions/{id}/ - Delete an attendance session
+    - POST /attendance-sessions/{id}/stop/ - Stop an active session
+    - GET /attendance-sessions/{id}/qr/ - Get QR code for the session
+    - GET /attendance-sessions/{id}/attendance/ - Get attendance records for the session
+    """
+    queryset = AttendanceSession.objects.all()
+    serializer_class = AttendanceSessionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = self.queryset.all()
+        # Optional filters
+        teacher_id = self.request.query_params.get('teacher')
+        course_id = self.request.query_params.get('course')
+        session_status = self.request.query_params.get('status')
+        section = self.request.query_params.get('section')
+        year = self.request.query_params.get('year')
+        
+        if teacher_id:
+            queryset = queryset.filter(teacher_id=teacher_id)
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        if session_status:
+            queryset = queryset.filter(status=session_status)
+        if section:
+            queryset = queryset.filter(section=section)
+        if year:
+            queryset = queryset.filter(year=year)
+        
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        """Start a new attendance session"""
+        # Generate a unique QR code token
+        qr_token = secrets.token_urlsafe(32)
+        
+        # Create the session without the token first
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            # Save the session and set the token
+            session = serializer.save(qr_code_token=qr_token, status='active')
+            
+            # Return the updated serializer data
+            response_serializer = self.get_serializer(session)
+            return Response({
+                'message': 'Attendance session started successfully',
+                'session': response_serializer.data
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def stop(self, request, pk=None):
+        """Stop an active attendance session"""
+        try:
+            session = self.get_object()
+        except AttendanceSession.DoesNotExist:
+            return Response(
+                {'error': 'Attendance session not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if session.status != 'active':
+            return Response(
+                {'error': 'Session is already stopped'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        session.status = 'stopped'
+        session.stopped_at = timezone.now()
+        session.save()
+
+        serializer = self.get_serializer(session)
+        return Response({
+            'message': 'Attendance session stopped successfully',
+            'session': serializer.data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'])
+    def qr(self, request, pk=None):
+        """Generate and return QR code for the session"""
+        try:
+            session = self.get_object()
+        except AttendanceSession.DoesNotExist:
+            return Response(
+                {'error': 'Attendance session not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if session.status != 'active':
+            return Response(
+                {'error': 'Session is not active'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Generate QR code
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(session.qr_code_token)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to base64
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+        
+        return Response({
+            'qr_code': f'data:image/png;base64,{img_base64}',
+            'qr_token': session.qr_code_token,
+            'session_id': session.id
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'])
+    def attendance(self, request, pk=None):
+        """Get attendance records for the session"""
+        try:
+            session = self.get_object()
+        except AttendanceSession.DoesNotExist:
+            return Response(
+                {'error': 'Attendance session not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        records = AttendanceRecord.objects.filter(session=session)
+        serializer = AttendanceRecordSerializer(records, many=True)
+        
+        # Calculate statistics
+        total_students = records.count()
+        present_students = records.filter(is_present=True).count()
+        rfid_only = records.filter(rfid_scanned=True, qr_scanned=False).count()
+        qr_only = records.filter(rfid_scanned=False, qr_scanned=True).count()
+        
+        return Response({
+            'records': serializer.data,
+            'statistics': {
+                'total_students': total_students,
+                'present': present_students,
+                'absent': total_students - present_students,
+                'rfid_only': rfid_only,
+                'qr_only': qr_only
+            }
+        }, status=status.HTTP_200_OK)
+
+
+class AttendanceRecordViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for AttendanceRecord model providing CRUD operations.
+    - GET /attendance-records/ - List all attendance records
+    - GET /attendance-records/{id}/ - Retrieve an attendance record
+    """
+    queryset = AttendanceRecord.objects.all()
+    serializer_class = AttendanceRecordSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = self.queryset.all()
+        # Optional filters
+        session_id = self.request.query_params.get('session')
+        student_id = self.request.query_params.get('student')
+        is_present = self.request.query_params.get('is_present')
+        
+        if session_id:
+            queryset = queryset.filter(session_id=session_id)
+        if student_id:
+            queryset = queryset.filter(student_id=student_id)
+        if is_present is not None:
+            queryset = queryset.filter(is_present=is_present.lower() == 'true')
+        
+        return queryset
+
+
+class RFIDScanView(APIView):
+    """
+    API endpoint for RFID scanning
+    POST /attendance/rfid-scan/
+    """
+    permission_classes = [AllowAny]  # Allow hardware to scan without auth
+
+    def _mark_attendance_if_complete(self, record, session):
+        """
+        Helper method to mark attendance and update StudentCourse if both scans are complete.
+        """
+        if record.rfid_scanned and record.qr_scanned:
+            record.is_present = True
+            record.marked_present_at = timezone.now()
+            
+            # Update StudentCourse attendance
+            student_course, _ = StudentCourse.objects.get_or_create(
+                student=record.student,
+                course=session.course,
+                teacher=session.teacher
+            )
+            
+            # Append the session date to classes_attended
+            session_date = session.started_at.strftime('%Y-%m-%d')
+            if student_course.classes_attended:
+                student_course.classes_attended = f"{student_course.classes_attended}, {session_date}"
+            else:
+                student_course.classes_attended = session_date
+            student_course.save()
+
+    def post(self, request):
+        serializer = RFIDScanSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        rfid = serializer.validated_data['rfid']
+        session_id = serializer.validated_data['session_id']
+
+        # Get student by RFID
+        try:
+            student = Student.objects.get(rfid=rfid)
+        except Student.DoesNotExist:
+            return Response(
+                {'error': 'Student not found with this RFID'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Get session
+        try:
+            session = AttendanceSession.objects.get(id=session_id)
+        except AttendanceSession.DoesNotExist:
+            return Response(
+                {'error': 'Attendance session not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check if session is active
+        if session.status != 'active':
+            return Response(
+                {'error': 'Attendance session is not active'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if student is enrolled in this course/section/year
+        if student.section != session.section or student.year != session.year:
+            return Response(
+                {'error': 'Student is not enrolled in this section/year'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get or create attendance record
+        record, created = AttendanceRecord.objects.get_or_create(
+            session=session,
+            student=student
+        )
+
+        # Update RFID scan
+        record.rfid_scanned = True
+        record.rfid_scanned_at = timezone.now()
+
+        # Check if both RFID and QR are scanned
+        self._mark_attendance_if_complete(record, session)
+
+        record.save()
+
+        return Response({
+            'message': 'RFID scanned successfully',
+            'student': student.student_name,
+            'rfid_scanned': True,
+            'qr_scanned': record.qr_scanned,
+            'is_present': record.is_present,
+            'needs_qr': not record.qr_scanned
+        }, status=status.HTTP_200_OK)
+
+
+class QRScanView(APIView):
+    """
+    API endpoint for QR code scanning
+    POST /attendance/qr-scan/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _mark_attendance_if_complete(self, record, session):
+        """
+        Helper method to mark attendance and update StudentCourse if both scans are complete.
+        """
+        if record.rfid_scanned and record.qr_scanned:
+            record.is_present = True
+            record.marked_present_at = timezone.now()
+            
+            # Update StudentCourse attendance
+            student_course, _ = StudentCourse.objects.get_or_create(
+                student=record.student,
+                course=session.course,
+                teacher=session.teacher
+            )
+            
+            # Append the session date to classes_attended
+            session_date = session.started_at.strftime('%Y-%m-%d')
+            if student_course.classes_attended:
+                student_course.classes_attended = f"{student_course.classes_attended}, {session_date}"
+            else:
+                student_course.classes_attended = session_date
+            student_course.save()
+
+    def post(self, request):
+        serializer = QRScanSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        qr_token = serializer.validated_data['qr_token']
+        student_id = serializer.validated_data['student_id']
+
+        # Get student
+        try:
+            student = Student.objects.get(student_id=student_id)
+        except Student.DoesNotExist:
+            return Response(
+                {'error': 'Student not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Get session by QR token
+        try:
+            session = AttendanceSession.objects.get(qr_code_token=qr_token)
+        except AttendanceSession.DoesNotExist:
+            return Response(
+                {'error': 'Invalid QR code or session not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check if session is active
+        if session.status != 'active':
+            return Response(
+                {'error': 'Attendance session is not active'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if student is enrolled in this course/section/year
+        if student.section != session.section or student.year != session.year:
+            return Response(
+                {'error': 'Student is not enrolled in this section/year'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get or create attendance record
+        record, created = AttendanceRecord.objects.get_or_create(
+            session=session,
+            student=student
+        )
+
+        # Update QR scan
+        record.qr_scanned = True
+        record.qr_scanned_at = timezone.now()
+
+        # Check if both RFID and QR are scanned
+        self._mark_attendance_if_complete(record, session)
+
+        record.save()
+
+        return Response({
+            'message': 'QR code scanned successfully',
+            'student': student.student_name,
+            'rfid_scanned': record.rfid_scanned,
+            'qr_scanned': True,
+            'is_present': record.is_present,
+            'needs_rfid': not record.rfid_scanned
+        }, status=status.HTTP_200_OK)
 
 
 # ============ Registration Views ============
