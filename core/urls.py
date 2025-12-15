@@ -61,6 +61,11 @@ urlpatterns = [
          TaughtCourseViewSet.as_view({'post': 'management_update', 'patch': 'management_update'}), 
          name='taughtcourse-management-update'),
     
+    # Custom action for TaughtCourse teacher update
+    path('taught-courses/<int:pk>/teacher-update/', 
+         TaughtCourseViewSet.as_view({'post': 'teacher_update', 'patch': 'teacher_update'}), 
+         name='taughtcourse-teacher-update'),
+    
     # Attendance scanning endpoints
     path('attendance/rfid-scan/', RFIDScanView.as_view(), name='rfid-scan'),
     path('attendance/qr-scan/', QRScanView.as_view(), name='qr-scan'),

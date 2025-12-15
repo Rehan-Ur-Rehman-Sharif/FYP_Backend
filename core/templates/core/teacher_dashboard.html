@@ -40,6 +40,20 @@
     .btn-qr:hover {
         background: #E8735F;
     }
+    .btn-edit {
+        background: #A0324B;
+        color: white;
+    }
+    .btn-edit:hover {
+        background: #8B2A3F;
+    }
+    .btn-cancel {
+        background: #95a5a6;
+        color: white;
+    }
+    .btn-cancel:hover {
+        background: #7f8c8d;
+    }
     .qr-container {
         margin: 15px 0;
         padding: 15px;
@@ -72,6 +86,84 @@
         font-size: 12px;
         margin-left: 10px;
     }
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.4);
+    }
+    .modal.active {
+        display: block;
+    }
+    .modal-content {
+        background-color: #fefefe;
+        margin: 10% auto;
+        padding: 30px;
+        border: 1px solid #888;
+        border-radius: 10px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #800020;
+        padding-bottom: 10px;
+    }
+    .modal-header h2 {
+        margin: 0;
+        color: #800020;
+    }
+    .close {
+        color: #aaa;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .close:hover,
+    .close:focus {
+        color: #000;
+    }
+    .form-group {
+        margin-bottom: 15px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+        color: #333;
+    }
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 14px;
+        box-sizing: border-box;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #800020;
+    }
+    .edit-form-display {
+        display: none;
+        margin-top: 15px;
+        padding: 15px;
+        background: #F5F5F5;
+        border-radius: 5px;
+    }
+    .edit-form-display.active {
+        display: block;
+    }
 </style>
 
 <div class="dashboard-container">
@@ -81,7 +173,8 @@
     </div>
     
     <div class="welcome-message">
-        <h2>Welcome, {{ teacher_name }}!</h2>
+        <h2>Welcome, <span id="display-teacher-name">{{ teacher_name }}</span>!</h2>
+        <button class="btn btn-edit" id="edit-profile-btn">Edit Profile</button>
     </div>
     
     <div class="stats-grid">
@@ -95,7 +188,7 @@
         </div>
         <div class="stat-card">
             <h3>Email</h3>
-            <div class="stat-value" style="font-size: 18px;">{{ email }}</div>
+            <div class="stat-value" style="font-size: 18px;" id="display-email">{{ email }}</div>
         </div>
     </div>
     
@@ -112,10 +205,33 @@
                             {% endif %}
                         </div>
                         <div style="font-size: 12px; color: #666;" data-section="{{ course.section }}" data-year="{{ course.year }}">
-                            Section: {{ course.section }} | Year: {{ course.year }}
+                            Section: <span class="course-section-display">{{ course.section }}</span> | Year: <span class="course-year-display">{{ course.year }}</span>
                         </div>
-                        <div style="font-size: 12px; color: #666;">Classes Taken: {{ course.classes_taken }}</div>
+                        <div style="font-size: 12px; color: #666;">Classes Taken: <span class="course-classes-display">{{ course.classes_taken }}</span></div>
                         <div style="display: none;" data-course-id="{{ course.course_id }}"></div>
+                        <button class="btn btn-edit edit-course-btn" data-taught-course-id="{{ course.taught_course_id }}" data-course-name="{{ course.course_name }}" data-section="{{ course.section }}" data-year="{{ course.year }}" data-classes="{{ course.classes_taken }}">
+                            Edit Course Info
+                        </button>
+                    </div>
+                    
+                    <div class="edit-form-display" id="edit-form-{{ course.taught_course_id }}">
+                        <h3>Edit {{ course.course_name }}</h3>
+                        <form class="edit-course-form" data-taught-course-id="{{ course.taught_course_id }}">
+                            <div class="form-group">
+                                <label>Section:</label>
+                                <input type="text" name="section" value="{{ course.section }}" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Year:</label>
+                                <input type="number" name="year" value="{{ course.year }}" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Classes Taken:</label>
+                                <textarea name="classes_taken" rows="3">{{ course.classes_taken }}</textarea>
+                            </div>
+                            <button type="submit" class="btn btn-start">Save Changes</button>
+                            <button type="button" class="btn btn-cancel cancel-edit-btn" data-taught-course-id="{{ course.taught_course_id }}">Cancel</button>
+                        </form>
                     </div>
                     
                     <div class="session-controls">
@@ -148,6 +264,32 @@
     </div>
 </div>
 
+<!-- Profile Edit Modal -->
+<div id="profile-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Profile</h2>
+            <span class="close" id="close-profile-modal">&times;</span>
+        </div>
+        <form id="profile-form">
+            <div class="form-group">
+                <label>Teacher Name:</label>
+                <input type="text" id="profile-teacher-name" name="teacher_name" value="{{ teacher_name }}" required>
+            </div>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" id="profile-email" name="email" value="{{ email }}" required>
+            </div>
+            <div class="form-group">
+                <label>Teacher Code (optional):</label>
+                <input type="text" id="profile-teacher-code" name="teacher_code" value="">
+            </div>
+            <button type="submit" class="btn btn-start">Save Changes</button>
+            <button type="button" class="btn btn-cancel" id="cancel-profile-btn">Cancel</button>
+        </form>
+    </div>
+</div>
+
 <script>
     // Get CSRF token for POST requests
     function getCookie(name) {
@@ -166,12 +308,131 @@
     }
     const csrftoken = getCookie('csrftoken');
 
+    // Profile edit modal handling
+    const profileModal = document.getElementById('profile-modal');
+    const editProfileBtn = document.getElementById('edit-profile-btn');
+    const closeProfileModal = document.getElementById('close-profile-modal');
+    const cancelProfileBtn = document.getElementById('cancel-profile-btn');
+    const profileForm = document.getElementById('profile-form');
+
+    editProfileBtn.addEventListener('click', () => {
+        profileModal.classList.add('active');
+    });
+
+    closeProfileModal.addEventListener('click', () => {
+        profileModal.classList.remove('active');
+    });
+
+    cancelProfileBtn.addEventListener('click', () => {
+        profileModal.classList.remove('active');
+    });
+
+    // Close modal when clicking outside
+    window.addEventListener('click', (event) => {
+        if (event.target === profileModal) {
+            profileModal.classList.remove('active');
+        }
+    });
+
+    // Profile form submission
+    profileForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(profileForm);
+        const data = {
+            teacher_name: formData.get('teacher_name'),
+            email: formData.get('email')
+        };
+        
+        // Only include teacher_code if it's not empty
+        const teacherCode = formData.get('teacher_code');
+        if (teacherCode && teacherCode.trim() !== '') {
+            data.teacher_code = teacherCode.trim();
+        }
+
+        try {
+            const response = await fetch('/api/teachers/update_profile/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                alert('Profile updated successfully!');
+                // Update display
+                document.getElementById('display-teacher-name').textContent = result.teacher.teacher_name;
+                document.getElementById('display-email').textContent = result.teacher.email;
+                profileModal.classList.remove('active');
+            } else {
+                const error = await response.json();
+                alert('Error: ' + (error.error || JSON.stringify(error)));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to update profile. Please try again.');
+        }
+    });
+
+    // Course edit button handling
+    document.addEventListener('click', (event) => {
+        if (event.target.classList.contains('edit-course-btn')) {
+            const taughtCourseId = event.target.getAttribute('data-taught-course-id');
+            const editForm = document.getElementById(`edit-form-${taughtCourseId}`);
+            editForm.classList.add('active');
+        }
+
+        if (event.target.classList.contains('cancel-edit-btn')) {
+            const taughtCourseId = event.target.getAttribute('data-taught-course-id');
+            const editForm = document.getElementById(`edit-form-${taughtCourseId}`);
+            editForm.classList.remove('active');
+        }
+    });
+
+    // Course edit form submission
+    document.querySelectorAll('.edit-course-form').forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const taughtCourseId = form.getAttribute('data-taught-course-id');
+            const formData = new FormData(form);
+            const data = {
+                section: formData.get('section'),
+                year: parseInt(formData.get('year')),
+                classes_taken: formData.get('classes_taken')
+            };
+
+            try {
+                const response = await fetch(`/api/taught-courses/${taughtCourseId}/teacher-update/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    alert('Course information updated successfully!');
+                    location.reload();
+                } else {
+                    const error = await response.json();
+                    alert('Error: ' + (error.error || JSON.stringify(error)));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to update course. Please try again.');
+            }
+        });
+    });
+
     // Event delegation for all buttons
     document.addEventListener('click', async function(event) {
         const target = event.target;
         
         // Start session button
-        if (target.classList.contains('btn-start')) {
+        if (target.classList.contains('btn-start') && !target.closest('form')) {
             const courseName = target.getAttribute('data-course-name');
             if (!confirm(`Start attendance session for ${courseName}?`)) return;
             

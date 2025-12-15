@@ -162,10 +162,105 @@ class TeacherViewSet(viewsets.ModelViewSet):
     - PUT /teachers/{id}/ - Update a teacher
     - PATCH /teachers/{id}/ - Partial update a teacher
     - DELETE /teachers/{id}/ - Delete a teacher
+    - POST /teachers/update_profile/ - Update current teacher's profile information
+    - GET /teachers/my_courses/ - Get current teacher's taught courses
     """
     queryset = Teacher.objects.all()
     serializer_class = TeacherSerializer
     permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=['post', 'patch'])
+    def update_profile(self, request):
+        """
+        Allow teachers to update their own profile information.
+        
+        POST/PATCH /teachers/update_profile/
+        Body: {
+            "teacher_name": "New Name",
+            "teacher_code": "TC123",
+            "email": "newemail@example.com"
+        }
+        """
+        try:
+            teacher = Teacher.objects.get(user=request.user)
+        except Teacher.DoesNotExist:
+            return Response(
+                {'error': 'Teacher profile not found for this user'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Extract fields that can be updated
+        teacher_name = request.data.get('teacher_name')
+        teacher_code = request.data.get('teacher_code')
+        email = request.data.get('email')
+        
+        # Validate at least one field is provided
+        if not any([teacher_name, teacher_code, email]):
+            return Response(
+                {'error': 'At least one field (teacher_name, teacher_code, or email) must be provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update fields if provided
+        if teacher_name:
+            teacher.teacher_name = teacher_name
+        
+        if teacher_code:
+            # Check for uniqueness
+            # Note: Database unique constraint provides ultimate protection against race conditions
+            if Teacher.objects.exclude(teacher_id=teacher.teacher_id).filter(teacher_code=teacher_code).exists():
+                return Response(
+                    {'error': 'Teacher code already exists'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            teacher.teacher_code = teacher_code
+        
+        if email:
+            # Check for uniqueness
+            # Note: Database unique constraint provides ultimate protection against race conditions
+            if Teacher.objects.exclude(teacher_id=teacher.teacher_id).filter(email=email).exists():
+                return Response(
+                    {'error': 'Email already exists'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # Also update the User email
+            if teacher.user:
+                teacher.user.email = email
+                teacher.user.username = email
+                teacher.user.save()
+            teacher.email = email
+        
+        teacher.save()
+        
+        serializer = self.get_serializer(teacher)
+        return Response({
+            'message': 'Profile updated successfully',
+            'teacher': serializer.data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
+    def my_courses(self, request):
+        """
+        Get the current teacher's taught courses.
+        
+        GET /teachers/my_courses/
+        """
+        try:
+            teacher = Teacher.objects.get(user=request.user)
+        except Teacher.DoesNotExist:
+            return Response(
+                {'error': 'Teacher profile not found for this user'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        taught_courses = TaughtCourse.objects.filter(teacher=teacher).select_related('course')
+        serializer = TaughtCourseSerializer(taught_courses, many=True)
+        
+        return Response({
+            'teacher_id': teacher.teacher_id,
+            'teacher_name': teacher.teacher_name,
+            'courses': serializer.data
+        }, status=status.HTTP_200_OK)
 
 
 class ManagementViewSet(viewsets.ModelViewSet):
@@ -223,6 +318,7 @@ class TaughtCourseViewSet(viewsets.ModelViewSet):
     - PATCH /taught-courses/{id}/ - Partial update a taught course
     - DELETE /taught-courses/{id}/ - Delete a taught course
     - POST /taught-courses/{id}/management-update/ - Management update for year, section, or course
+    - POST /taught-courses/{id}/teacher-update/ - Teacher update for their own courses (section, year, classes_taken)
     """
     queryset = TaughtCourse.objects.all()
     serializer_class = TaughtCourseSerializer
@@ -300,6 +396,70 @@ class TaughtCourseViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(taught_course)
         return Response({
             'message': 'TaughtCourse updated successfully by management',
+            'taught_course': serializer.data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post', 'patch'])
+    def teacher_update(self, request, pk=None):
+        """
+        Allow teachers to update their own taught course entries.
+        Teachers can only update section, year, and classes_taken fields.
+        
+        POST/PATCH /taught-courses/{id}/teacher_update/
+        Body: {
+            "section": "B",
+            "year": 2,
+            "classes_taken": "Room 101, Room 102"
+        }
+        """
+        # Verify the user is a teacher
+        try:
+            teacher = Teacher.objects.get(user=request.user)
+        except Teacher.DoesNotExist:
+            return Response(
+                {'error': 'Only teachers can perform this action'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Get the TaughtCourse instance (DRF will handle 404 automatically)
+        taught_course = self.get_object()
+
+        # Verify the teacher owns this TaughtCourse
+        if taught_course.teacher != teacher:
+            return Response(
+                {'error': 'You can only update your own taught courses'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Extract fields that can be updated by teacher
+        section = request.data.get('section')
+        year = request.data.get('year')
+        classes_taken = request.data.get('classes_taken')
+
+        # Validate at least one field is provided
+        if section is None and year is None and classes_taken is None:
+            return Response(
+                {'error': 'At least one of section, year, or classes_taken must be provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Update fields
+        if section is not None:
+            taught_course.section = section
+
+        if year is not None:
+            taught_course.year = year
+
+        if classes_taken is not None:
+            taught_course.classes_taken = classes_taken
+
+        # Save the updated TaughtCourse
+        taught_course.save()
+
+        # Return the updated data
+        serializer = self.get_serializer(taught_course)
+        return Response({
+            'message': 'TaughtCourse updated successfully',
             'taught_course': serializer.data
         }, status=status.HTTP_200_OK)
 
