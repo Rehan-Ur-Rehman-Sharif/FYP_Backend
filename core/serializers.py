@@ -156,29 +156,40 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
         
         # Create StudentCourse entries for each course
         if course_ids:
+            # Fetch all courses at once to avoid N+1 queries
+            courses = {c.course_id: c for c in Course.objects.filter(course_id__in=course_ids)}
+            
+            # Fetch all relevant TaughtCourse entries at once
+            taught_courses = TaughtCourse.objects.filter(
+                course_id__in=course_ids,
+                year=student.year,
+                section=student.section
+            ).select_related('teacher', 'course')
+            
+            # Create a mapping of course_id to teacher
+            course_teacher_map = {tc.course_id: tc.teacher for tc in taught_courses}
+            
+            # Create StudentCourse entries
+            student_courses_to_create = []
             for course_id in course_ids:
-                course = Course.objects.get(course_id=course_id)
+                course = courses.get(course_id)
+                teacher = course_teacher_map.get(course_id)
                 
-                # Find the teacher who teaches this course for this student's year and section
-                taught_course = TaughtCourse.objects.filter(
-                    course=course,
-                    year=student.year,
-                    section=student.section
-                ).first()
-                
-                if taught_course:
-                    # Create StudentCourse entry with the teacher from TaughtCourse
-                    StudentCourse.objects.create(
-                        student=student,
-                        course=course,
-                        teacher=taught_course.teacher,
-                        classes_attended=''
+                # Only create StudentCourse if a teacher is assigned for this course
+                # (i.e., a TaughtCourse entry exists for the student's year and section)
+                if course and teacher:
+                    student_courses_to_create.append(
+                        StudentCourse(
+                            student=student,
+                            course=course,
+                            teacher=teacher,
+                            classes_attended=''
+                        )
                     )
-                else:
-                    # If no TaughtCourse exists, we still need to create the StudentCourse
-                    # but we can't assign a teacher yet. We'll skip this for now
-                    # to maintain data consistency (teacher is required in StudentCourse)
-                    pass
+            
+            # Bulk create all StudentCourse entries
+            if student_courses_to_create:
+                StudentCourse.objects.bulk_create(student_courses_to_create)
         
         return student
 

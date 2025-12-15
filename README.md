@@ -91,9 +91,15 @@ POST /api/auth/register/student/
     "rfid": "RFID123456",
     "year": 2,
     "dept": "CS",
-    "section": "A"
+    "section": "A",
+    "courses": [1, 2, 3]
 }
 ```
+
+**Note:** The `courses` field is optional and accepts a list of course IDs. The system will:
+- Validate that all course IDs exist in the database
+- Automatically assign teachers based on TaughtCourse entries for the student's year and section
+- Create StudentCourse entries for successful enrollments
 
 **Response:**
 ```json
@@ -101,7 +107,21 @@ POST /api/auth/register/student/
     "message": "Student registered successfully",
     "student_id": 1,
     "email": "student@example.com",
-    "student_name": "John Doe"
+    "student_name": "John Doe",
+    "enrolled_courses": [
+        {
+            "course_id": 1,
+            "course_name": "Mathematics",
+            "teacher_id": 5,
+            "teacher_name": "Dr. Smith"
+        },
+        {
+            "course_id": 2,
+            "course_name": "Physics",
+            "teacher_id": 6,
+            "teacher_name": "Dr. Johnson"
+        }
+    ]
 }
 ```
 
