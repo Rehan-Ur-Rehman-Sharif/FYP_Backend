@@ -6,7 +6,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from django.http import HttpResponse
+from django.http import HttpResponse, Http404
 from rest_framework import status, generics, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -141,6 +141,7 @@ class TaughtCourseViewSet(viewsets.ModelViewSet):
     - PUT /taught-courses/{id}/ - Update a taught course
     - PATCH /taught-courses/{id}/ - Partial update a taught course
     - DELETE /taught-courses/{id}/ - Delete a taught course
+    - POST /taught-courses/{id}/management-update/ - Management update for year, section, or course
     """
     queryset = TaughtCourse.objects.all()
     serializer_class = TaughtCourseSerializer
@@ -156,6 +157,70 @@ class TaughtCourseViewSet(viewsets.ModelViewSet):
         if teacher_id:
             queryset = queryset.filter(teacher_id=teacher_id)
         return queryset
+
+    @action(detail=True, methods=['post', 'patch'])
+    def management_update(self, request, pk=None):
+        """
+        Custom endpoint for management users to update TaughtCourse entries.
+        Allows updating year, section, and course fields with proper validation.
+        """
+        # Verify the user is a management user
+        try:
+            management = Management.objects.get(user=request.user)
+        except Management.DoesNotExist:
+            return Response(
+                {'error': 'Only management users can perform this action'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Get the TaughtCourse instance
+        try:
+            taught_course = self.get_object()
+        except Http404:
+            return Response(
+                {'error': 'TaughtCourse not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Extract fields that can be updated
+        year = request.data.get('year')
+        section = request.data.get('section')
+        course_id = request.data.get('course')
+
+        # Validate at least one field is provided
+        if year is None and section is None and course_id is None:
+            return Response(
+                {'error': 'At least one of year, section, or course must be provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate course_id first to avoid partial updates
+        if course_id is not None:
+            try:
+                course = Course.objects.get(pk=course_id)
+            except Course.DoesNotExist:
+                return Response(
+                    {'error': f'Course with id {course_id} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            taught_course.course = course
+
+        # Update other fields
+        if year is not None:
+            taught_course.year = year
+
+        if section is not None:
+            taught_course.section = section
+
+        # Save the updated TaughtCourse
+        taught_course.save()
+
+        # Return the updated data
+        serializer = self.get_serializer(taught_course)
+        return Response({
+            'message': 'TaughtCourse updated successfully by management',
+            'taught_course': serializer.data
+        }, status=status.HTTP_200_OK)
 
 
 class StudentCourseViewSet(viewsets.ModelViewSet):
