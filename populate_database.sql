@@ -46,27 +46,27 @@ ALTER SEQUENCE auth_user_id_seq RESTART WITH 1;
 -- Insert Users for Students (5 users)
 INSERT INTO auth_user (id, password, last_login, is_superuser, username, first_name, last_name, email, is_staff, is_active, date_joined)
 VALUES
-(1, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, FALSE, 'student1', 'Ahmed', 'Khan', 'ahmed.khan@university.edu', FALSE, TRUE, NOW()),
-(2, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, FALSE, 'student2', 'Fatima', 'Ali', 'fatima.ali@university.edu', FALSE, TRUE, NOW()),
-(3, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, FALSE, 'student3', 'Hassan', 'Malik', 'hassan.malik@university.edu', FALSE, TRUE, NOW()),
-(4, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, FALSE, 'student4', 'Ayesha', 'Raza', 'ayesha.raza@university.edu', FALSE, TRUE, NOW()),
-(5, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, FALSE, 'student5', 'Usman', 'Sheikh', 'usman.sheikh@university.edu', FALSE, TRUE, NOW());
+(1, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, FALSE, 'student1', 'Ahmed', 'Khan', 'ahmed.khan@university.edu', FALSE, TRUE, NOW()),
+(2, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, FALSE, 'student2', 'Fatima', 'Ali', 'fatima.ali@university.edu', FALSE, TRUE, NOW()),
+(3, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, FALSE, 'student3', 'Hassan', 'Malik', 'hassan.malik@university.edu', FALSE, TRUE, NOW()),
+(4, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, FALSE, 'student4', 'Ayesha', 'Raza', 'ayesha.raza@university.edu', FALSE, TRUE, NOW()),
+(5, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, FALSE, 'student5', 'Usman', 'Sheikh', 'usman.sheikh@university.edu', FALSE, TRUE, NOW());
 
 -- Insert Users for Teachers (6 users)
 INSERT INTO auth_user (id, password, last_login, is_superuser, username, first_name, last_name, email, is_staff, is_active, date_joined)
 VALUES
-(6, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, FALSE, 'teacher1', 'Dr. Sarah', 'Ahmed', 'sarah.ahmed@university.edu', TRUE, TRUE, NOW()),
-(7, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, FALSE, 'teacher2', 'Prof. Muhammad', 'Hussain', 'muhammad.hussain@university.edu', TRUE, TRUE, NOW()),
-(8, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, FALSE, 'teacher3', 'Dr. Zainab', 'Farooq', 'zainab.farooq@university.edu', TRUE, TRUE, NOW()),
-(9, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, FALSE, 'teacher4', 'Prof. Ali', 'Haider', 'ali.haider@university.edu', TRUE, TRUE, NOW()),
-(10, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, FALSE, 'teacher5', 'Dr. Mariam', 'Nasir', 'mariam.nasir@university.edu', TRUE, TRUE, NOW()),
-(11, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, FALSE, 'teacher6', 'Prof. Imran', 'Siddiqui', 'imran.siddiqui@university.edu', TRUE, TRUE, NOW());
+(6, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, FALSE, 'teacher1', 'Dr. Sarah', 'Ahmed', 'sarah.ahmed@university.edu', TRUE, TRUE, NOW()),
+(7, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, FALSE, 'teacher2', 'Prof. Muhammad', 'Hussain', 'muhammad.hussain@university.edu', TRUE, TRUE, NOW()),
+(8, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, FALSE, 'teacher3', 'Dr. Zainab', 'Farooq', 'zainab.farooq@university.edu', TRUE, TRUE, NOW()),
+(9, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, FALSE, 'teacher4', 'Prof. Ali', 'Haider', 'ali.haider@university.edu', TRUE, TRUE, NOW()),
+(10, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, FALSE, 'teacher5', 'Dr. Mariam', 'Nasir', 'mariam.nasir@university.edu', TRUE, TRUE, NOW()),
+(11, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, FALSE, 'teacher6', 'Prof. Imran', 'Siddiqui', 'imran.siddiqui@university.edu', TRUE, TRUE, NOW());
 
 -- Insert Users for Management (2 users)
 INSERT INTO auth_user (id, password, last_login, is_superuser, username, first_name, last_name, email, is_staff, is_active, date_joined)
 VALUES
-(12, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, TRUE, 'management1', 'Dean', 'Rashid', 'dean.rashid@university.edu', TRUE, TRUE, NOW()),
-(13, 'pbkdf2_sha256$870000$1234567890abcdefghijklmnop$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH=', NULL, TRUE, 'management2', 'HOD', 'Kamran', 'hod.kamran@university.edu', TRUE, TRUE, NOW());
+(12, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, TRUE, 'management1', 'Dean', 'Rashid', 'dean.rashid@university.edu', TRUE, TRUE, NOW()),
+(13, 'pbkdf2_sha256$1000000$7BRaWqhmQOqohPELg8GhZK$AYmrbt3rCUv4XvLqzxhBB+ZhQUwwVr6Ko4oJwPkCS44=', NULL, TRUE, 'management2', 'HOD', 'Kamran', 'hod.kamran@university.edu', TRUE, TRUE, NOW());
 
 -- Reset the auth_user sequence
 ALTER SEQUENCE auth_user_id_seq RESTART WITH 14;

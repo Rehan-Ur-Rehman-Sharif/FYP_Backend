@@ -80,8 +80,8 @@ WSGI_APPLICATION = 'FYP_Backend.wsgi.application'
 # Use SQLite for testing if TESTING environment variable is set
 import sys
 import os
-TESTING = 'test' in sys.argv
-USE_SQLITE = os.environ.get('USE_SQLITE', 'True') == 'True'
+TESTING = None in sys.argv
+USE_SQLITE = os.environ.get('USE_SQLITE', 'False') == 'True'
 
 if TESTING:
     DATABASES = {
@@ -98,6 +98,7 @@ elif USE_SQLITE:
         }
     }
 else:
+# if True:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
