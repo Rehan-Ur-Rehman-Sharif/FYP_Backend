@@ -1703,4 +1703,394 @@ class TaughtCourseManagementUpdateTestCase(APITestCase):
         self.assertEqual(self.taught_course.classes_taken, 'Class A')
 
 
+class BulkEnrollStudentsTestCase(APITestCase):
+    """Test cases for bulk enrollment of students in courses"""
+    
+    def setUp(self):
+        # Create management user
+        self.management_user = User.objects.create_user(
+            username='management@test.com',
+            email='management@test.com',
+            password='TestPass123!'
+        )
+        self.management = Management.objects.create(
+            user=self.management_user,
+            email='management@test.com',
+            Management_name='Test Management'
+        )
+        
+        # Create a teacher
+        self.teacher = Teacher.objects.create(
+            teacher_name='Test Teacher',
+            email='teacher@test.com',
+            rfid='RFID_TEACHER'
+        )
+        
+        # Create courses
+        self.course1 = Course.objects.create(
+            course_name='Network Information Security',
+            course_code='CT-486'
+        )
+        self.course2 = Course.objects.create(
+            course_name='Database Systems',
+            course_code='CS-301'
+        )
+        
+        # Create students with different years and sections
+        self.student1 = Student.objects.create(
+            student_name='Student 1',
+            email='student1@test.com',
+            rfid='RFID001',
+            year=2024,
+            dept='CS',
+            section='B'
+        )
+        self.student2 = Student.objects.create(
+            student_name='Student 2',
+            email='student2@test.com',
+            rfid='RFID002',
+            year=2024,
+            dept='CS',
+            section='B'
+        )
+        self.student3 = Student.objects.create(
+            student_name='Student 3',
+            email='student3@test.com',
+            rfid='RFID003',
+            year=2024,
+            dept='CS',
+            section='A'
+        )
+        self.student4 = Student.objects.create(
+            student_name='Student 4',
+            email='student4@test.com',
+            rfid='RFID004',
+            year=2023,
+            dept='IT',
+            section='B'
+        )
+        
+        # Create TaughtCourse entries
+        self.taught_course1 = TaughtCourse.objects.create(
+            course=self.course1,
+            teacher=self.teacher,
+            year=2024,
+            section='B',
+            classes_taken=''
+        )
+        self.taught_course2 = TaughtCourse.objects.create(
+            course=self.course2,
+            teacher=self.teacher,
+            year=2024,
+            section='A',
+            classes_taken=''
+        )
+        
+        # Login as management
+        self.client.force_authenticate(user=self.management_user)
+    
+    def test_bulk_enroll_by_year_section(self):
+        """Test bulk enrollment of students by year and section"""
+        url = reverse('studentcourse-bulk-enroll')
+        data = {
+            'course_id': self.course1.course_id,
+            'year': 2024,
+            'section': 'B'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['enrolled_count'], 2)
+        self.assertEqual(response.data['skipped_count'], 0)
+        
+        # Verify StudentCourse entries were created
+        self.assertTrue(StudentCourse.objects.filter(student=self.student1, course=self.course1).exists())
+        self.assertTrue(StudentCourse.objects.filter(student=self.student2, course=self.course1).exists())
+        self.assertFalse(StudentCourse.objects.filter(student=self.student3, course=self.course1).exists())
+    
+    def test_bulk_enroll_by_specific_student_ids(self):
+        """Test bulk enrollment of specific students by IDs"""
+        url = reverse('studentcourse-bulk-enroll')
+        data = {
+            'course_id': self.course1.course_id,
+            'student_ids': [self.student1.student_id, self.student2.student_id]
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['enrolled_count'], 2)
+        
+        # Verify StudentCourse entries were created
+        self.assertTrue(StudentCourse.objects.filter(student=self.student1, course=self.course1).exists())
+        self.assertTrue(StudentCourse.objects.filter(student=self.student2, course=self.course1).exists())
+    
+    def test_bulk_enroll_with_dept_filter(self):
+        """Test bulk enrollment with department filter"""
+        url = reverse('studentcourse-bulk-enroll')
+        data = {
+            'course_id': self.course1.course_id,
+            'year': 2024,
+            'section': 'B',
+            'dept': 'CS'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['enrolled_count'], 2)
+    
+    def test_bulk_enroll_already_enrolled_students(self):
+        """Test bulk enrollment skips already enrolled students"""
+        # Pre-enroll student1
+        StudentCourse.objects.create(
+            student=self.student1,
+            course=self.course1,
+            teacher=self.teacher,
+            classes_attended=''
+        )
+        
+        url = reverse('studentcourse-bulk-enroll')
+        data = {
+            'course_id': self.course1.course_id,
+            'year': 2024,
+            'section': 'B'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['enrolled_count'], 1)  # Only student2 enrolled
+        self.assertEqual(response.data['skipped_count'], 1)  # student1 skipped
+    
+    def test_bulk_enroll_no_teacher_assigned(self):
+        """Test bulk enrollment when no teacher is assigned for the course"""
+        url = reverse('studentcourse-bulk-enroll')
+        data = {
+            'course_id': self.course1.course_id,
+            'year': 2023,  # No TaughtCourse for year 2023
+            'section': 'B'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['enrolled_count'], 0)
+        self.assertEqual(response.data['skipped_count'], 1)
+        self.assertIn('No teacher assigned', response.data['skipped_students'][0]['reason'])
+    
+    def test_bulk_enroll_no_students_found(self):
+        """Test bulk enrollment when no students match the criteria"""
+        url = reverse('studentcourse-bulk-enroll')
+        data = {
+            'course_id': self.course1.course_id,
+            'year': 2025,  # No students in year 2025
+            'section': 'Z'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn('No students found', response.data['error'])
+    
+    def test_bulk_enroll_invalid_course(self):
+        """Test bulk enrollment with invalid course ID"""
+        url = reverse('studentcourse-bulk-enroll')
+        data = {
+            'course_id': 9999,  # Non-existent course
+            'year': 2024,
+            'section': 'B'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('course_id', response.data)
+    
+    def test_bulk_enroll_missing_filters(self):
+        """Test bulk enrollment fails when no filters are provided"""
+        url = reverse('studentcourse-bulk-enroll')
+        data = {
+            'course_id': self.course1.course_id
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_bulk_enroll_non_management_user(self):
+        """Test bulk enrollment fails for non-management users"""
+        # Create and authenticate as a student
+        student_user = User.objects.create_user(
+            username='student@test.com',
+            email='student@test.com',
+            password='TestPass123!'
+        )
+        self.client.force_authenticate(user=student_user)
+        
+        url = reverse('studentcourse-bulk-enroll')
+        data = {
+            'course_id': self.course1.course_id,
+            'year': 2024,
+            'section': 'B'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class SingleStudentEnrollTestCase(APITestCase):
+    """Test cases for single student enrollment in courses"""
+    
+    def setUp(self):
+        # Create management user
+        self.management_user = User.objects.create_user(
+            username='management@test.com',
+            email='management@test.com',
+            password='TestPass123!'
+        )
+        self.management = Management.objects.create(
+            user=self.management_user,
+            email='management@test.com',
+            Management_name='Test Management'
+        )
+        
+        # Create a teacher
+        self.teacher = Teacher.objects.create(
+            teacher_name='Test Teacher',
+            email='teacher@test.com',
+            rfid='RFID_TEACHER'
+        )
+        
+        # Create a course
+        self.course = Course.objects.create(
+            course_name='Network Information Security',
+            course_code='CT-486'
+        )
+        
+        # Create a student
+        self.student = Student.objects.create(
+            student_name='Test Student',
+            email='student@test.com',
+            rfid='RFID001',
+            year=2024,
+            dept='CS',
+            section='B'
+        )
+        
+        # Create TaughtCourse entry
+        self.taught_course = TaughtCourse.objects.create(
+            course=self.course,
+            teacher=self.teacher,
+            year=2024,
+            section='B',
+            classes_taken=''
+        )
+        
+        # Login as management
+        self.client.force_authenticate(user=self.management_user)
+    
+    def test_single_student_enroll_success(self):
+        """Test successful single student enrollment"""
+        url = reverse('student-enroll-course', kwargs={'pk': self.student.student_id})
+        data = {
+            'course_id': self.course.course_id
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('Student enrolled successfully', response.data['message'])
+        self.assertEqual(response.data['student_id'], self.student.student_id)
+        self.assertEqual(response.data['course_id'], self.course.course_id)
+        
+        # Verify StudentCourse entry was created
+        self.assertTrue(StudentCourse.objects.filter(
+            student=self.student,
+            course=self.course,
+            teacher=self.teacher
+        ).exists())
+    
+    def test_single_student_enroll_already_enrolled(self):
+        """Test enrollment fails when student is already enrolled"""
+        # Pre-enroll student
+        StudentCourse.objects.create(
+            student=self.student,
+            course=self.course,
+            teacher=self.teacher,
+            classes_attended=''
+        )
+        
+        url = reverse('student-enroll-course', kwargs={'pk': self.student.student_id})
+        data = {
+            'course_id': self.course.course_id
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already enrolled', response.data['error'])
+    
+    def test_single_student_enroll_no_teacher_assigned(self):
+        """Test enrollment fails when no teacher is assigned"""
+        # Create a course without TaughtCourse
+        course2 = Course.objects.create(
+            course_name='Data Structures',
+            course_code='CS-201'
+        )
+        
+        url = reverse('student-enroll-course', kwargs={'pk': self.student.student_id})
+        data = {
+            'course_id': course2.course_id
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('No teacher assigned', response.data['error'])
+    
+    def test_single_student_enroll_invalid_course(self):
+        """Test enrollment fails with invalid course ID"""
+        url = reverse('student-enroll-course', kwargs={'pk': self.student.student_id})
+        data = {
+            'course_id': 9999  # Non-existent course
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_single_student_enroll_invalid_student(self):
+        """Test enrollment fails with invalid student ID"""
+        url = reverse('student-enroll-course', kwargs={'pk': 9999})
+        data = {
+            'course_id': self.course.course_id
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+    
+    def test_single_student_enroll_non_management_user(self):
+        """Test enrollment fails for non-management users"""
+        # Create and authenticate as a teacher
+        teacher_user = User.objects.create_user(
+            username='teacher2@test.com',
+            email='teacher2@test.com',
+            password='TestPass123!'
+        )
+        self.client.force_authenticate(user=teacher_user)
+        
+        url = reverse('student-enroll-course', kwargs={'pk': self.student.student_id})
+        data = {
+            'course_id': self.course.course_id
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
 

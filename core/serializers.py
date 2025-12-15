@@ -330,3 +330,43 @@ class QRScanSerializer(serializers.Serializer):
     """Serializer for QR scan requests"""
     qr_token = serializers.CharField(required=True)
     student_id = serializers.IntegerField(required=True)
+
+
+class BulkEnrollStudentsSerializer(serializers.Serializer):
+    """Serializer for bulk enrollment of students in a course"""
+    course_id = serializers.IntegerField(required=True, help_text="ID of the course to enroll students in")
+    year = serializers.IntegerField(required=False, help_text="Filter students by year (e.g., 1, 2, 3, 4)")
+    section = serializers.CharField(required=False, max_length=10, help_text="Filter students by section (e.g., A, B, C)")
+    dept = serializers.CharField(required=False, max_length=100, help_text="Filter students by department (e.g., CS, IT)")
+    student_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        help_text="Specific list of student IDs to enroll (optional, overrides filters)"
+    )
+
+    def validate(self, attrs):
+        # Must have either filters (year/section/dept) or specific student_ids
+        has_filters = any(key in attrs for key in ['year', 'section', 'dept'])
+        has_student_ids = 'student_ids' in attrs and attrs['student_ids']
+        
+        if not has_filters and not has_student_ids:
+            raise serializers.ValidationError(
+                "Must provide either filter criteria (year, section, dept) or specific student_ids"
+            )
+        
+        # Validate course exists
+        course_id = attrs.get('course_id')
+        if not Course.objects.filter(course_id=course_id).exists():
+            raise serializers.ValidationError({"course_id": f"Course with id {course_id} does not exist"})
+        
+        return attrs
+
+
+class SingleStudentEnrollSerializer(serializers.Serializer):
+    """Serializer for enrolling a single student in a course"""
+    course_id = serializers.IntegerField(required=True, help_text="ID of the course to enroll the student in")
+
+    def validate_course_id(self, value):
+        if not Course.objects.filter(course_id=value).exists():
+            raise serializers.ValidationError(f"Course with id {value} does not exist")
+        return value

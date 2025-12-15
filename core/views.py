@@ -33,7 +33,9 @@ from .serializers import (
     AttendanceSessionSerializer,
     AttendanceRecordSerializer,
     RFIDScanSerializer,
-    QRScanSerializer
+    QRScanSerializer,
+    BulkEnrollStudentsSerializer,
+    SingleStudentEnrollSerializer
 )
 from .models import (
     Student, Teacher, Management, StudentCourse, TaughtCourse, Course, Class,
@@ -52,6 +54,7 @@ class StudentViewSet(viewsets.ModelViewSet):
     - PUT /students/{id}/ - Update a student
     - PATCH /students/{id}/ - Partial update a student
     - DELETE /students/{id}/ - Delete a student
+    - POST /students/{id}/enroll_course/ - Enroll a single student in a course
     """
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
@@ -70,6 +73,78 @@ class StudentViewSet(viewsets.ModelViewSet):
         if section:
             queryset = queryset.filter(section=section)
         return queryset
+
+    @action(detail=True, methods=['post'])
+    def enroll_course(self, request, pk=None):
+        """
+        Enroll a single student in a course.
+        
+        POST /students/{id}/enroll_course/
+        Body: {
+            "course_id": 1
+        }
+        """
+        # Verify the user is a management user
+        try:
+            management = Management.objects.get(user=request.user)
+        except Management.DoesNotExist:
+            return Response(
+                {'error': 'Only management users can enroll students'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        try:
+            student = self.get_object()
+        except Http404:
+            return Response(
+                {'error': 'Student not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = SingleStudentEnrollSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        course_id = serializer.validated_data['course_id']
+        course = Course.objects.get(course_id=course_id)
+        
+        # Find the teacher who teaches this course for this student's year and section
+        taught_course = TaughtCourse.objects.filter(
+            course=course,
+            year=student.year,
+            section=student.section
+        ).first()
+        
+        if not taught_course:
+            return Response(
+                {'error': f'No teacher assigned for course {course.course_name} in year {student.year} section {student.section}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if already enrolled
+        if StudentCourse.objects.filter(student=student, course=course, teacher=taught_course.teacher).exists():
+            return Response(
+                {'error': 'Student is already enrolled in this course'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create StudentCourse entry
+        student_course = StudentCourse.objects.create(
+            student=student,
+            course=course,
+            teacher=taught_course.teacher,
+            classes_attended=''
+        )
+        
+        return Response({
+            'message': 'Student enrolled successfully',
+            'student_id': student.student_id,
+            'student_name': student.student_name,
+            'course_id': course.course_id,
+            'course_name': course.course_name,
+            'teacher_id': taught_course.teacher.teacher_id,
+            'teacher_name': taught_course.teacher.teacher_name
+        }, status=status.HTTP_201_CREATED)
 
 
 class TeacherViewSet(viewsets.ModelViewSet):
@@ -232,6 +307,7 @@ class StudentCourseViewSet(viewsets.ModelViewSet):
     - PUT /student-courses/{id}/ - Update a student course
     - PATCH /student-courses/{id}/ - Partial update a student course
     - DELETE /student-courses/{id}/ - Delete a student course
+    - POST /student-courses/bulk_enroll/ - Bulk enroll students in a course
     """
     queryset = StudentCourse.objects.all()
     serializer_class = StudentCourseSerializer
@@ -250,6 +326,109 @@ class StudentCourseViewSet(viewsets.ModelViewSet):
         if teacher_id:
             queryset = queryset.filter(teacher_id=teacher_id)
         return queryset
+
+    @action(detail=False, methods=['post'])
+    def bulk_enroll(self, request):
+        """
+        Bulk enroll students in a course based on filters (year, section, dept) or specific student IDs.
+        Example: Assign all students of year 2024 Section B the course CT-486
+        
+        POST /student-courses/bulk_enroll/
+        Body: {
+            "course_id": 1,
+            "year": 2024,
+            "section": "B",
+            "dept": "CS"  // optional
+        }
+        OR
+        Body: {
+            "course_id": 1,
+            "student_ids": [1, 2, 3, 4, 5]
+        }
+        """
+        # Verify the user is a management user
+        try:
+            management = Management.objects.get(user=request.user)
+        except Management.DoesNotExist:
+            return Response(
+                {'error': 'Only management users can perform bulk enrollment'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = BulkEnrollStudentsSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        course_id = serializer.validated_data['course_id']
+        course = Course.objects.get(course_id=course_id)
+        
+        # Build student queryset based on filters or specific IDs
+        if 'student_ids' in serializer.validated_data and serializer.validated_data['student_ids']:
+            students = Student.objects.filter(student_id__in=serializer.validated_data['student_ids'])
+        else:
+            students = Student.objects.all()
+            if 'year' in serializer.validated_data:
+                students = students.filter(year=serializer.validated_data['year'])
+            if 'section' in serializer.validated_data:
+                students = students.filter(section=serializer.validated_data['section'])
+            if 'dept' in serializer.validated_data:
+                students = students.filter(dept=serializer.validated_data['dept'])
+        
+        if not students.exists():
+            return Response(
+                {'error': 'No students found matching the criteria'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get teacher for the course based on students' year and section
+        enrolled_count = 0
+        skipped_count = 0
+        skipped_students = []
+        
+        for student in students:
+            # Find the teacher who teaches this course for this student's year and section
+            taught_course = TaughtCourse.objects.filter(
+                course=course,
+                year=student.year,
+                section=student.section
+            ).first()
+            
+            if not taught_course:
+                skipped_count += 1
+                skipped_students.append({
+                    'student_id': student.student_id,
+                    'student_name': student.student_name,
+                    'reason': f'No teacher assigned for course {course.course_name} in year {student.year} section {student.section}'
+                })
+                continue
+            
+            # Check if already enrolled
+            if StudentCourse.objects.filter(student=student, course=course, teacher=taught_course.teacher).exists():
+                skipped_count += 1
+                skipped_students.append({
+                    'student_id': student.student_id,
+                    'student_name': student.student_name,
+                    'reason': 'Already enrolled in this course'
+                })
+                continue
+            
+            # Create StudentCourse entry
+            StudentCourse.objects.create(
+                student=student,
+                course=course,
+                teacher=taught_course.teacher,
+                classes_attended=''
+            )
+            enrolled_count += 1
+        
+        return Response({
+            'message': f'Bulk enrollment completed',
+            'course_name': course.course_name,
+            'enrolled_count': enrolled_count,
+            'skipped_count': skipped_count,
+            'total_students_found': students.count(),
+            'skipped_students': skipped_students
+        }, status=status.HTTP_200_OK)
 
 
 class UpdateAttendanceRequestViewSet(viewsets.ModelViewSet):
