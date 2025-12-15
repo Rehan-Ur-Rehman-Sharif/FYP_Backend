@@ -106,7 +106,13 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         course_id = serializer.validated_data['course_id']
-        course = Course.objects.get(course_id=course_id)
+        try:
+            course = Course.objects.get(course_id=course_id)
+        except Course.DoesNotExist:
+            return Response(
+                {'error': f'Course with id {course_id} not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
         # Find the teacher who teaches this course for this student's year and section
         taught_course = TaughtCourse.objects.filter(
@@ -360,7 +366,13 @@ class StudentCourseViewSet(viewsets.ModelViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         course_id = serializer.validated_data['course_id']
-        course = Course.objects.get(course_id=course_id)
+        try:
+            course = Course.objects.get(course_id=course_id)
+        except Course.DoesNotExist:
+            return Response(
+                {'error': f'Course with id {course_id} not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
         # Build student queryset based on filters or specific IDs
         if 'student_ids' in serializer.validated_data and serializer.validated_data['student_ids']:
