@@ -95,10 +95,17 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
     email = serializers.EmailField(required=True)
+    courses = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False,
+        allow_empty=True,
+        help_text="List of course IDs to enroll the student in"
+    )
 
     class Meta:
         model = Student
-        fields = ('email', 'password', 'password2', 'student_name', 'roll_number', 'rfid', 'year', 'dept', 'section')
+        fields = ('email', 'password', 'password2', 'student_name', 'roll_number', 'rfid', 'year', 'dept', 'section', 'courses')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -107,9 +114,24 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
         if User.objects.filter(email=attrs['email']).exists():
             raise serializers.ValidationError({"email": "Email already exists."})
         
+        # Validate that all course IDs exist in the Course table
+        course_ids = attrs.get('courses', [])
+        if course_ids:
+            existing_courses = Course.objects.filter(course_id__in=course_ids)
+            existing_course_ids = set(existing_courses.values_list('course_id', flat=True))
+            invalid_course_ids = set(course_ids) - existing_course_ids
+            
+            if invalid_course_ids:
+                raise serializers.ValidationError({
+                    "courses": f"The following course IDs do not exist: {sorted(invalid_course_ids)}"
+                })
+        
         return attrs
 
     def create(self, validated_data):
+        # Extract courses before creating the student
+        course_ids = validated_data.pop('courses', [])
+        
         # Remove password2 as it's not needed for User creation
         validated_data.pop('password2')
         
@@ -131,6 +153,32 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
             dept=validated_data['dept'],
             section=validated_data['section']
         )
+        
+        # Create StudentCourse entries for each course
+        if course_ids:
+            for course_id in course_ids:
+                course = Course.objects.get(course_id=course_id)
+                
+                # Find the teacher who teaches this course for this student's year and section
+                taught_course = TaughtCourse.objects.filter(
+                    course=course,
+                    year=student.year,
+                    section=student.section
+                ).first()
+                
+                if taught_course:
+                    # Create StudentCourse entry with the teacher from TaughtCourse
+                    StudentCourse.objects.create(
+                        student=student,
+                        course=course,
+                        teacher=taught_course.teacher,
+                        classes_attended=''
+                    )
+                else:
+                    # If no TaughtCourse exists, we still need to create the StudentCourse
+                    # but we can't assign a teacher yet. We'll skip this for now
+                    # to maintain data consistency (teacher is required in StudentCourse)
+                    pass
         
         return student
 
