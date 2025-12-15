@@ -159,12 +159,9 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
             # Fetch all courses at once to avoid N+1 queries
             courses = {c.course_code: c for c in Course.objects.filter(course_code__in=course_codes)}
             
-            # Get course IDs for TaughtCourse query
-            course_ids = [c.course_id for c in courses.values()]
-            
             # Fetch all relevant TaughtCourse entries at once
             taught_courses = TaughtCourse.objects.filter(
-                course_id__in=course_ids,
+                course__in=courses.values(),
                 year=student.year,
                 section=student.section
             ).select_related('teacher', 'course')
