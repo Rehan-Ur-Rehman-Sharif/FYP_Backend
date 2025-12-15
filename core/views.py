@@ -127,20 +127,19 @@ class StudentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Check if already enrolled
-        if StudentCourse.objects.filter(student=student, course=course, teacher=taught_course.teacher).exists():
+        # Create StudentCourse entry (using get_or_create to prevent race condition)
+        student_course, created = StudentCourse.objects.get_or_create(
+            student=student,
+            course=course,
+            teacher=taught_course.teacher,
+            defaults={'classes_attended': ''}
+        )
+        
+        if not created:
             return Response(
                 {'error': 'Student is already enrolled in this course'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Create StudentCourse entry
-        student_course = StudentCourse.objects.create(
-            student=student,
-            course=course,
-            teacher=taught_course.teacher,
-            classes_attended=''
-        )
         
         return Response({
             'message': 'Student enrolled successfully',
@@ -414,24 +413,23 @@ class StudentCourseViewSet(viewsets.ModelViewSet):
                 })
                 continue
             
-            # Check if already enrolled
-            if StudentCourse.objects.filter(student=student, course=course, teacher=taught_course.teacher).exists():
+            # Create StudentCourse entry (using get_or_create to prevent race condition)
+            student_course, created = StudentCourse.objects.get_or_create(
+                student=student,
+                course=course,
+                teacher=taught_course.teacher,
+                defaults={'classes_attended': ''}
+            )
+            
+            if created:
+                enrolled_count += 1
+            else:
                 skipped_count += 1
                 skipped_students.append({
                     'student_id': student.student_id,
                     'student_name': student.student_name,
                     'reason': 'Already enrolled in this course'
                 })
-                continue
-            
-            # Create StudentCourse entry
-            StudentCourse.objects.create(
-                student=student,
-                course=course,
-                teacher=taught_course.teacher,
-                classes_attended=''
-            )
-            enrolled_count += 1
         
         return Response({
             'message': f'Bulk enrollment completed',
