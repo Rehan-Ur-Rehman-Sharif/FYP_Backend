@@ -344,7 +344,7 @@ class StudentCourseViewSet(viewsets.ModelViewSet):
             "course_id": 1,
             "year": 2024,
             "section": "B",
-            "dept": "CS"  // optional
+            "dept": "CS"  # optional
         }
         OR
         Body: {
