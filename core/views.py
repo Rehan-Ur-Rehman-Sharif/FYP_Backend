@@ -197,7 +197,7 @@ class TaughtCourseViewSet(viewsets.ModelViewSet):
         # Validate course_id first to avoid partial updates
         if course_id is not None:
             try:
-                course = Course.objects.get(course_id=course_id)
+                course = Course.objects.get(pk=course_id)
             except Course.DoesNotExist:
                 return Response(
                     {'error': f'Course with id {course_id} not found'},
@@ -208,7 +208,7 @@ class TaughtCourseViewSet(viewsets.ModelViewSet):
         # Update other fields
         if year is not None:
             taught_course.year = year
-        
+
         if section is not None:
             taught_course.section = section
 
