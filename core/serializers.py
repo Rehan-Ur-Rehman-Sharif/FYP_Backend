@@ -183,7 +183,7 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
                             student=student,
                             course=course,
                             teacher=teacher,
-                            classes_attended=''
+                            classes_attended=''  # Empty initially; populated as student attends classes
                         )
                     )
             
