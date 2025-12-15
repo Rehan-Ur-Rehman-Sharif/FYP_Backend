@@ -95,10 +95,17 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
     email = serializers.EmailField(required=True)
+    courses = serializers.ListField(
+        child=serializers.CharField(),
+        write_only=True,
+        required=False,
+        allow_empty=True,
+        help_text="List of course codes to enroll the student in"
+    )
 
     class Meta:
         model = Student
-        fields = ('email', 'password', 'password2', 'student_name', 'roll_number', 'rfid', 'year', 'dept', 'section')
+        fields = ('email', 'password', 'password2', 'student_name', 'roll_number', 'rfid', 'year', 'dept', 'section', 'courses')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -107,9 +114,24 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
         if User.objects.filter(email=attrs['email']).exists():
             raise serializers.ValidationError({"email": "Email already exists."})
         
+        # Validate that all course codes exist in the Course table
+        course_codes = attrs.get('courses', [])
+        if course_codes:
+            existing_courses = Course.objects.filter(course_code__in=course_codes)
+            existing_course_codes = set(existing_courses.values_list('course_code', flat=True))
+            invalid_course_codes = set(course_codes) - existing_course_codes
+            
+            if invalid_course_codes:
+                raise serializers.ValidationError({
+                    "courses": f"The following course codes do not exist: {sorted(invalid_course_codes)}"
+                })
+        
         return attrs
 
     def create(self, validated_data):
+        # Extract courses before creating the student
+        course_codes = validated_data.pop('courses', [])
+        
         # Remove password2 as it's not needed for User creation
         validated_data.pop('password2')
         
@@ -131,6 +153,43 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
             dept=validated_data['dept'],
             section=validated_data['section']
         )
+        
+        # Create StudentCourse entries for each course
+        if course_codes:
+            # Fetch all courses at once to avoid N+1 queries
+            courses = {c.course_code: c for c in Course.objects.filter(course_code__in=course_codes)}
+            
+            # Fetch all relevant TaughtCourse entries at once
+            taught_courses = TaughtCourse.objects.filter(
+                course__in=courses.values(),
+                year=student.year,
+                section=student.section
+            ).select_related('teacher', 'course')
+            
+            # Create a mapping of course_code to teacher
+            course_teacher_map = {tc.course.course_code: tc.teacher for tc in taught_courses}
+            
+            # Create StudentCourse entries
+            student_courses_to_create = []
+            for course_code in course_codes:
+                course = courses.get(course_code)
+                teacher = course_teacher_map.get(course_code)
+                
+                # Only create StudentCourse if a teacher is assigned for this course
+                # (i.e., a TaughtCourse entry exists for the student's year and section)
+                if course and teacher:
+                    student_courses_to_create.append(
+                        StudentCourse(
+                            student=student,
+                            course=course,
+                            teacher=teacher,
+                            classes_attended=''  # Empty initially; populated as student attends classes
+                        )
+                    )
+            
+            # Bulk create all StudentCourse entries
+            if student_courses_to_create:
+                StudentCourse.objects.bulk_create(student_courses_to_create)
         
         return student
 

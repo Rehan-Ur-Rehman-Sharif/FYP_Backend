@@ -744,11 +744,25 @@ class StudentRegistrationView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             student = serializer.save()
+            
+            # Get the courses the student was enrolled in
+            enrolled_courses = StudentCourse.objects.filter(student=student).select_related('course', 'teacher')
+            enrolled_courses_data = [
+                {
+                    'course_id': sc.course.course_id,
+                    'course_name': sc.course.course_name,
+                    'teacher_id': sc.teacher.teacher_id,
+                    'teacher_name': sc.teacher.teacher_name
+                }
+                for sc in enrolled_courses
+            ]
+            
             return Response({
                 'message': 'Student registered successfully',
                 'student_id': student.student_id,
                 'email': student.email,
-                'student_name': student.student_name
+                'student_name': student.student_name,
+                'enrolled_courses': enrolled_courses_data
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

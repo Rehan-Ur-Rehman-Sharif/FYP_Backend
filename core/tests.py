@@ -46,6 +46,126 @@ class StudentRegistrationTestCase(APITestCase):
         self.client.post(self.url, self.valid_data, format='json')
         response = self.client.post(self.url, self.valid_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_student_registration_with_valid_courses(self):
+        """Test student registration with valid course codes"""
+        # Create courses
+        course1 = Course.objects.create(course_name='Math 101', course_code='MATH101')
+        course2 = Course.objects.create(course_name='Physics 101', course_code='PHYS101')
+        
+        # Create a teacher
+        teacher = Teacher.objects.create(
+            teacher_name='Test Teacher',
+            email='teacher@test.com',
+            rfid='RFID_TEACHER'
+        )
+        
+        # Create TaughtCourse entries
+        TaughtCourse.objects.create(
+            course=course1,
+            teacher=teacher,
+            year=1,
+            section='A',
+            classes_taken=''
+        )
+        TaughtCourse.objects.create(
+            course=course2,
+            teacher=teacher,
+            year=1,
+            section='A',
+            classes_taken=''
+        )
+        
+        # Register student with courses
+        data = self.valid_data.copy()
+        data['courses'] = ['MATH101', 'PHYS101']
+        response = self.client.post(self.url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('enrolled_courses', response.data)
+        self.assertEqual(len(response.data['enrolled_courses']), 2)
+        
+        # Verify StudentCourse entries were created
+        student = Student.objects.get(email='student@test.com')
+        student_courses = StudentCourse.objects.filter(student=student)
+        self.assertEqual(student_courses.count(), 2)
+        
+        # Verify the courses are correctly assigned
+        course_codes = set(sc.course.course_code for sc in student_courses)
+        self.assertEqual(course_codes, {'MATH101', 'PHYS101'})
+        
+        # Verify teachers are assigned
+        for sc in student_courses:
+            self.assertEqual(sc.teacher, teacher)
+    
+    def test_student_registration_with_invalid_course_codes(self):
+        """Test student registration fails with invalid course codes"""
+        data = self.valid_data.copy()
+        data['courses'] = ['INVALID101', 'NOTEXIST202']  # Non-existent course codes
+        response = self.client.post(self.url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('courses', response.data)
+        
+        # Verify student was not created
+        self.assertFalse(Student.objects.filter(email='student@test.com').exists())
+    
+    def test_student_registration_with_mixed_valid_invalid_courses(self):
+        """Test student registration fails when some course codes are invalid"""
+        # Create one valid course
+        course1 = Course.objects.create(course_name='Math 101', course_code='MATH101')
+        
+        data = self.valid_data.copy()
+        data['courses'] = ['MATH101', 'INVALID999']  # One valid, one invalid
+        response = self.client.post(self.url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('courses', response.data)
+        
+        # Verify student was not created
+        self.assertFalse(Student.objects.filter(email='student@test.com').exists())
+    
+    def test_student_registration_with_empty_courses_list(self):
+        """Test student registration succeeds with empty courses list"""
+        data = self.valid_data.copy()
+        data['courses'] = []
+        response = self.client.post(self.url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('enrolled_courses', response.data)
+        self.assertEqual(len(response.data['enrolled_courses']), 0)
+        
+        # Verify student was created
+        student = Student.objects.get(email='student@test.com')
+        self.assertEqual(StudentCourse.objects.filter(student=student).count(), 0)
+    
+    def test_student_registration_without_courses_field(self):
+        """Test student registration succeeds without courses field"""
+        # Don't include courses field at all
+        response = self.client.post(self.url, self.valid_data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('enrolled_courses', response.data)
+        self.assertEqual(len(response.data['enrolled_courses']), 0)
+    
+    def test_student_registration_course_without_taught_course(self):
+        """Test student registration when course exists but no TaughtCourse for that year/section"""
+        # Create a course
+        course = Course.objects.create(course_name='Math 101', course_code='MATH101')
+        
+        # Don't create any TaughtCourse entry
+        
+        data = self.valid_data.copy()
+        data['courses'] = ['MATH101']
+        response = self.client.post(self.url, data, format='json')
+        
+        # Registration should succeed
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # But no StudentCourse should be created (since no teacher is assigned)
+        student = Student.objects.get(email='student@test.com')
+        self.assertEqual(StudentCourse.objects.filter(student=student).count(), 0)
+        self.assertEqual(len(response.data['enrolled_courses']), 0)
 
 
 class StudentLoginTestCase(APITestCase):
