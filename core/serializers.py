@@ -370,3 +370,56 @@ class SingleStudentEnrollSerializer(serializers.Serializer):
         if not Course.objects.filter(course_id=value).exists():
             raise serializers.ValidationError(f"Course with id {value} does not exist")
         return value
+
+
+class BulkUpdateStudentCoursesSerializer(serializers.Serializer):
+    """Serializer for bulk update of student course enrollments"""
+    # Filters to select which StudentCourse records to update
+    year = serializers.IntegerField(required=False, help_text="Filter by student year (e.g., 1, 2, 3, 4)")
+    section = serializers.CharField(required=False, max_length=10, help_text="Filter by student section (e.g., A, B, C)")
+    dept = serializers.CharField(required=False, max_length=100, help_text="Filter by student department (e.g., CS, IT)")
+    current_course_id = serializers.IntegerField(required=False, help_text="Filter by current course ID")
+    student_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        help_text="Specific list of student IDs (optional, overrides filters)"
+    )
+    
+    # Fields to update
+    new_course_id = serializers.IntegerField(required=False, help_text="New course ID to assign")
+    new_teacher_id = serializers.IntegerField(required=False, help_text="New teacher ID to assign")
+    classes_attended = serializers.CharField(required=False, max_length=255, allow_blank=True, help_text="Update classes attended")
+
+    def validate(self, attrs):
+        # Must have either filters or specific student_ids
+        has_filters = any(key in attrs for key in ['year', 'section', 'dept', 'current_course_id'])
+        has_student_ids = 'student_ids' in attrs and attrs['student_ids']
+        
+        if not has_filters and not has_student_ids:
+            raise serializers.ValidationError(
+                "Must provide either filter criteria (year, section, dept, current_course_id) or specific student_ids"
+            )
+        
+        # Must have at least one update field
+        has_updates = any(key in attrs for key in ['new_course_id', 'new_teacher_id', 'classes_attended'])
+        if not has_updates:
+            raise serializers.ValidationError(
+                "Must provide at least one field to update (new_course_id, new_teacher_id, classes_attended)"
+            )
+        
+        # Validate new_course_id if provided
+        if 'new_course_id' in attrs:
+            if not Course.objects.filter(course_id=attrs['new_course_id']).exists():
+                raise serializers.ValidationError({"new_course_id": f"Course with id {attrs['new_course_id']} does not exist"})
+        
+        # Validate new_teacher_id if provided
+        if 'new_teacher_id' in attrs:
+            if not Teacher.objects.filter(teacher_id=attrs['new_teacher_id']).exists():
+                raise serializers.ValidationError({"new_teacher_id": f"Teacher with id {attrs['new_teacher_id']} does not exist"})
+        
+        # Validate current_course_id if provided
+        if 'current_course_id' in attrs:
+            if not Course.objects.filter(course_id=attrs['current_course_id']).exists():
+                raise serializers.ValidationError({"current_course_id": f"Course with id {attrs['current_course_id']} does not exist"})
+        
+        return attrs

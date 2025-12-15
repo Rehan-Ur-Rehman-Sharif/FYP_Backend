@@ -2093,4 +2093,297 @@ class SingleStudentEnrollTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class BulkUpdateStudentCoursesTestCase(APITestCase):
+    """Test cases for bulk update of student course enrollments"""
+    
+    def setUp(self):
+        # Create management user
+        self.management_user = User.objects.create_user(
+            username='management@test.com',
+            email='management@test.com',
+            password='TestPass123!'
+        )
+        self.management = Management.objects.create(
+            user=self.management_user,
+            email='management@test.com',
+            Management_name='Test Management'
+        )
+        
+        # Create teachers
+        self.teacher1 = Teacher.objects.create(
+            teacher_name='Teacher 1',
+            email='teacher1@test.com',
+            rfid='RFID_TEACHER1'
+        )
+        self.teacher2 = Teacher.objects.create(
+            teacher_name='Teacher 2',
+            email='teacher2@test.com',
+            rfid='RFID_TEACHER2'
+        )
+        
+        # Create courses
+        self.course1 = Course.objects.create(
+            course_name='Database Systems',
+            course_code='CS-301'
+        )
+        self.course2 = Course.objects.create(
+            course_name='Network Security',
+            course_code='CT-486'
+        )
+        
+        # Create students
+        self.student1 = Student.objects.create(
+            student_name='Student 1',
+            email='student1@test.com',
+            rfid='RFID001',
+            year=2024,
+            dept='CS',
+            section='B'
+        )
+        self.student2 = Student.objects.create(
+            student_name='Student 2',
+            email='student2@test.com',
+            rfid='RFID002',
+            year=2024,
+            dept='CS',
+            section='B'
+        )
+        self.student3 = Student.objects.create(
+            student_name='Student 3',
+            email='student3@test.com',
+            rfid='RFID003',
+            year=2024,
+            dept='IT',
+            section='A'
+        )
+        
+        # Create existing StudentCourse enrollments
+        self.sc1 = StudentCourse.objects.create(
+            student=self.student1,
+            course=self.course1,
+            teacher=self.teacher1,
+            classes_attended='2024-01-01, 2024-01-08'
+        )
+        self.sc2 = StudentCourse.objects.create(
+            student=self.student2,
+            course=self.course1,
+            teacher=self.teacher1,
+            classes_attended='2024-01-01'
+        )
+        self.sc3 = StudentCourse.objects.create(
+            student=self.student3,
+            course=self.course2,
+            teacher=self.teacher2,
+            classes_attended=''
+        )
+        
+        # Login as management
+        self.client.force_authenticate(user=self.management_user)
+    
+    def test_bulk_update_change_course(self):
+        """Test bulk update to change course for students"""
+        url = reverse('studentcourse-bulk-update')
+        data = {
+            'year': 2024,
+            'section': 'B',
+            'dept': 'CS',
+            'current_course_id': self.course1.course_id,
+            'new_course_id': self.course2.course_id
+        }
+        
+        response = self.client.put(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['updated_count'], 2)
+        
+        # Verify updates
+        self.sc1.refresh_from_db()
+        self.sc2.refresh_from_db()
+        self.assertEqual(self.sc1.course, self.course2)
+        self.assertEqual(self.sc2.course, self.course2)
+    
+    def test_bulk_update_change_teacher(self):
+        """Test bulk update to change teacher for students"""
+        url = reverse('studentcourse-bulk-update')
+        data = {
+            'year': 2024,
+            'section': 'B',
+            'new_teacher_id': self.teacher2.teacher_id
+        }
+        
+        response = self.client.put(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['updated_count'], 2)
+        
+        # Verify updates
+        self.sc1.refresh_from_db()
+        self.sc2.refresh_from_db()
+        self.assertEqual(self.sc1.teacher, self.teacher2)
+        self.assertEqual(self.sc2.teacher, self.teacher2)
+    
+    def test_bulk_update_change_attendance(self):
+        """Test bulk update to modify classes_attended"""
+        url = reverse('studentcourse-bulk-update')
+        data = {
+            'year': 2024,
+            'section': 'B',
+            'classes_attended': '2024-01-01, 2024-01-08, 2024-01-15'
+        }
+        
+        response = self.client.put(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['updated_count'], 2)
+        
+        # Verify updates
+        self.sc1.refresh_from_db()
+        self.sc2.refresh_from_db()
+        self.assertEqual(self.sc1.classes_attended, '2024-01-01, 2024-01-08, 2024-01-15')
+        self.assertEqual(self.sc2.classes_attended, '2024-01-01, 2024-01-08, 2024-01-15')
+    
+    def test_bulk_update_multiple_fields(self):
+        """Test bulk update changing multiple fields at once"""
+        url = reverse('studentcourse-bulk-update')
+        data = {
+            'year': 2024,
+            'section': 'B',
+            'new_course_id': self.course2.course_id,
+            'new_teacher_id': self.teacher2.teacher_id,
+            'classes_attended': 'Updated'
+        }
+        
+        response = self.client.put(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['updated_count'], 2)
+        
+        # Verify updates
+        self.sc1.refresh_from_db()
+        self.assertEqual(self.sc1.course, self.course2)
+        self.assertEqual(self.sc1.teacher, self.teacher2)
+        self.assertEqual(self.sc1.classes_attended, 'Updated')
+    
+    def test_bulk_update_by_student_ids(self):
+        """Test bulk update using specific student IDs"""
+        url = reverse('studentcourse-bulk-update')
+        data = {
+            'student_ids': [self.student1.student_id, self.student2.student_id],
+            'new_teacher_id': self.teacher2.teacher_id
+        }
+        
+        response = self.client.put(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['updated_count'], 2)
+    
+    def test_bulk_update_with_course_filter(self):
+        """Test bulk update filtered by current course"""
+        url = reverse('studentcourse-bulk-update')
+        data = {
+            'current_course_id': self.course1.course_id,
+            'new_teacher_id': self.teacher2.teacher_id
+        }
+        
+        response = self.client.put(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['updated_count'], 2)
+        
+        # Verify only course1 enrollments were updated
+        self.sc1.refresh_from_db()
+        self.sc2.refresh_from_db()
+        self.sc3.refresh_from_db()
+        self.assertEqual(self.sc1.teacher, self.teacher2)
+        self.assertEqual(self.sc2.teacher, self.teacher2)
+        # sc3 is enrolled in course2, so should NOT be affected (remains teacher2 from original setup)
+        self.assertEqual(self.sc3.teacher, self.teacher2)
+    
+    def test_bulk_update_no_records_found(self):
+        """Test bulk update when no records match criteria"""
+        url = reverse('studentcourse-bulk-update')
+        data = {
+            'year': 2025,  # No students in year 2025
+            'section': 'Z',
+            'new_teacher_id': self.teacher2.teacher_id
+        }
+        
+        response = self.client.put(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn('No student course enrollments found', response.data['error'])
+    
+    def test_bulk_update_invalid_course(self):
+        """Test bulk update with invalid course ID"""
+        url = reverse('studentcourse-bulk-update')
+        data = {
+            'year': 2024,
+            'section': 'B',
+            'new_course_id': 9999  # Non-existent course
+        }
+        
+        response = self.client.put(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('new_course_id', response.data)
+    
+    def test_bulk_update_invalid_teacher(self):
+        """Test bulk update with invalid teacher ID"""
+        url = reverse('studentcourse-bulk-update')
+        data = {
+            'year': 2024,
+            'section': 'B',
+            'new_teacher_id': 9999  # Non-existent teacher
+        }
+        
+        response = self.client.put(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('new_teacher_id', response.data)
+    
+    def test_bulk_update_missing_filters_and_student_ids(self):
+        """Test bulk update fails when no filters provided"""
+        url = reverse('studentcourse-bulk-update')
+        data = {
+            'new_teacher_id': self.teacher2.teacher_id
+        }
+        
+        response = self.client.put(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_bulk_update_missing_update_fields(self):
+        """Test bulk update fails when no update fields provided"""
+        url = reverse('studentcourse-bulk-update')
+        data = {
+            'year': 2024,
+            'section': 'B'
+        }
+        
+        response = self.client.put(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_bulk_update_non_management_user(self):
+        """Test bulk update fails for non-management users"""
+        # Create and authenticate as a student
+        student_user = User.objects.create_user(
+            username='student@test.com',
+            email='student@test.com',
+            password='TestPass123!'
+        )
+        self.client.force_authenticate(user=student_user)
+        
+        url = reverse('studentcourse-bulk-update')
+        data = {
+            'year': 2024,
+            'section': 'B',
+            'new_teacher_id': self.teacher2.teacher_id
+        }
+        
+        response = self.client.put(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
 
