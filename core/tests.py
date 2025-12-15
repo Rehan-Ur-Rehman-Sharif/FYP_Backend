@@ -1543,6 +1543,23 @@ class TaughtCourseManagementUpdateTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertIn('Course with id 99999 not found', response.data['error'])
     
+    def test_update_with_invalid_course_id_prevents_partial_update(self):
+        """Test that invalid course_id prevents any updates (year/section not updated)"""
+        self.client.force_authenticate(user=self.management_user)
+        data = {
+            'year': 4,
+            'section': 'D',
+            'course': 99999  # Invalid course ID
+        }
+        response = self.client.post(self.update_url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        
+        # Verify that year and section were NOT updated
+        self.taught_course.refresh_from_db()
+        self.assertEqual(self.taught_course.year, 1)  # Original value
+        self.assertEqual(self.taught_course.section, 'A')  # Original value
+    
     def test_update_nonexistent_taught_course(self):
         """Test that updating a nonexistent TaughtCourse returns 404"""
         self.client.force_authenticate(user=self.management_user)

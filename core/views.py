@@ -6,7 +6,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from django.http import HttpResponse
+from django.http import HttpResponse, Http404
 from rest_framework import status, generics, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -164,8 +164,6 @@ class TaughtCourseViewSet(viewsets.ModelViewSet):
         Custom endpoint for management users to update TaughtCourse entries.
         Allows updating year, section, and course fields with proper validation.
         """
-        from django.http import Http404
-
         # Verify the user is a management user
         try:
             management = Management.objects.get(user=request.user)
@@ -196,22 +194,23 @@ class TaughtCourseViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Update the fields if provided
-        if year is not None:
-            taught_course.year = year
-        
-        if section is not None:
-            taught_course.section = section
-        
+        # Validate course_id first to avoid partial updates
         if course_id is not None:
             try:
                 course = Course.objects.get(course_id=course_id)
-                taught_course.course = course
             except Course.DoesNotExist:
                 return Response(
                     {'error': f'Course with id {course_id} not found'},
                     status=status.HTTP_404_NOT_FOUND
                 )
+            taught_course.course = course
+
+        # Update other fields
+        if year is not None:
+            taught_course.year = year
+        
+        if section is not None:
+            taught_course.section = section
 
         # Save the updated TaughtCourse
         taught_course.save()
