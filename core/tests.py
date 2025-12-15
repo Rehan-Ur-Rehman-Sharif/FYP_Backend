@@ -1401,3 +1401,169 @@ class AttendanceSessionStatisticsTestCase(APITestCase):
         self.assertEqual(response.data['statistics']['qr_only'], 1)
 
 
+class TaughtCourseManagementUpdateTestCase(APITestCase):
+    """Test management update functionality for TaughtCourse"""
+    
+    def setUp(self):
+        # Create management user
+        self.management_user = User.objects.create_user(
+            username='management@test.com',
+            email='management@test.com',
+            password='TestPass123!'
+        )
+        self.management = Management.objects.create(
+            user=self.management_user,
+            email='management@test.com',
+            Management_name='Test Management'
+        )
+        
+        # Create regular user (non-management)
+        self.regular_user = User.objects.create_user(
+            username='regular@test.com',
+            email='regular@test.com',
+            password='TestPass123!'
+        )
+        
+        # Create test data
+        self.teacher = Teacher.objects.create(
+            teacher_name='Test Teacher',
+            email='teacher@test.com',
+            rfid='RFID001'
+        )
+        self.course1 = Course.objects.create(course_name='Course 1', course_code='CS101')
+        self.course2 = Course.objects.create(course_name='Course 2', course_code='CS102')
+        
+        self.taught_course = TaughtCourse.objects.create(
+            course=self.course1,
+            teacher=self.teacher,
+            classes_taken='Class A',
+            section='A',
+            year=1
+        )
+        
+        self.update_url = reverse('taughtcourse-management-update', args=[self.taught_course.id])
+    
+    def test_management_can_update_year(self):
+        """Test that management can update year field"""
+        self.client.force_authenticate(user=self.management_user)
+        response = self.client.post(self.update_url, {'year': 2}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['taught_course']['year'], 2)
+        self.assertEqual(response.data['message'], 'TaughtCourse updated successfully by management')
+        
+        # Verify database was updated
+        self.taught_course.refresh_from_db()
+        self.assertEqual(self.taught_course.year, 2)
+    
+    def test_management_can_update_section(self):
+        """Test that management can update section field"""
+        self.client.force_authenticate(user=self.management_user)
+        response = self.client.post(self.update_url, {'section': 'B'}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['taught_course']['section'], 'B')
+        
+        # Verify database was updated
+        self.taught_course.refresh_from_db()
+        self.assertEqual(self.taught_course.section, 'B')
+    
+    def test_management_can_update_course(self):
+        """Test that management can update course field"""
+        self.client.force_authenticate(user=self.management_user)
+        response = self.client.post(self.update_url, {'course': self.course2.course_id}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['taught_course']['course'], self.course2.course_id)
+        
+        # Verify database was updated
+        self.taught_course.refresh_from_db()
+        self.assertEqual(self.taught_course.course, self.course2)
+    
+    def test_management_can_update_multiple_fields(self):
+        """Test that management can update multiple fields at once"""
+        self.client.force_authenticate(user=self.management_user)
+        data = {
+            'year': 3,
+            'section': 'C',
+            'course': self.course2.course_id
+        }
+        response = self.client.post(self.update_url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['taught_course']['year'], 3)
+        self.assertEqual(response.data['taught_course']['section'], 'C')
+        self.assertEqual(response.data['taught_course']['course'], self.course2.course_id)
+        
+        # Verify database was updated
+        self.taught_course.refresh_from_db()
+        self.assertEqual(self.taught_course.year, 3)
+        self.assertEqual(self.taught_course.section, 'C')
+        self.assertEqual(self.taught_course.course, self.course2)
+    
+    def test_management_update_with_patch_method(self):
+        """Test that management can use PATCH method for updates"""
+        self.client.force_authenticate(user=self.management_user)
+        response = self.client.patch(self.update_url, {'year': 4}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['taught_course']['year'], 4)
+    
+    def test_non_management_cannot_update(self):
+        """Test that non-management users cannot use this endpoint"""
+        self.client.force_authenticate(user=self.regular_user)
+        response = self.client.post(self.update_url, {'year': 2}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('Only management users', response.data['error'])
+        
+        # Verify database was not updated
+        self.taught_course.refresh_from_db()
+        self.assertEqual(self.taught_course.year, 1)
+    
+    def test_unauthenticated_user_cannot_update(self):
+        """Test that unauthenticated users cannot use this endpoint"""
+        response = self.client.post(self.update_url, {'year': 2}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+    
+    def test_update_with_no_fields_returns_error(self):
+        """Test that providing no fields returns an error"""
+        self.client.force_authenticate(user=self.management_user)
+        response = self.client.post(self.update_url, {}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('At least one of', response.data['error'])
+    
+    def test_update_with_invalid_course_id(self):
+        """Test that providing invalid course_id returns an error"""
+        self.client.force_authenticate(user=self.management_user)
+        response = self.client.post(self.update_url, {'course': 99999}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn('Course with id 99999 not found', response.data['error'])
+    
+    def test_update_nonexistent_taught_course(self):
+        """Test that updating a nonexistent TaughtCourse returns 404"""
+        self.client.force_authenticate(user=self.management_user)
+        nonexistent_url = reverse('taughtcourse-management-update', args=[99999])
+        response = self.client.post(nonexistent_url, {'year': 2}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+    
+    def test_update_preserves_other_fields(self):
+        """Test that updating one field doesn't affect other fields"""
+        self.client.force_authenticate(user=self.management_user)
+        response = self.client.post(self.update_url, {'year': 2}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify other fields are unchanged
+        self.taught_course.refresh_from_db()
+        self.assertEqual(self.taught_course.section, 'A')
+        self.assertEqual(self.taught_course.course, self.course1)
+        self.assertEqual(self.taught_course.teacher, self.teacher)
+        self.assertEqual(self.taught_course.classes_taken, 'Class A')
+
+
+

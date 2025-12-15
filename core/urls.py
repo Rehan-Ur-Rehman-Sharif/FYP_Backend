@@ -56,6 +56,11 @@ urlpatterns = [
          UpdateAttendanceRequestViewSet.as_view({'post': 'reject'}), 
          name='updateattendancerequest-reject'),
     
+    # Custom action for TaughtCourse management update
+    path('taught-courses/<int:pk>/management-update/', 
+         TaughtCourseViewSet.as_view({'post': 'management_update', 'patch': 'management_update'}), 
+         name='taughtcourse-management-update'),
+    
     # Attendance scanning endpoints
     path('attendance/rfid-scan/', RFIDScanView.as_view(), name='rfid-scan'),
     path('attendance/qr-scan/', QRScanView.as_view(), name='qr-scan'),
