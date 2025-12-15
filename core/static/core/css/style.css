@@ -6,7 +6,7 @@
 
 body {
     font-family: Arial, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #A0324B 0%, #800020 100%);
     min-height: 100vh;
     display: flex;
     justify-content: center;
@@ -67,14 +67,14 @@ input[type="password"]:focus,
 input[type="text"]:focus,
 input[type="number"]:focus,
 select:focus {
-    border-color: #667eea;
+    border-color: #800020;
     outline: none;
 }
 
 button, .btn {
     width: 100%;
     padding: 12px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #A0324B 0%, #800020 100%);
     color: white;
     border: none;
     border-radius: 5px;
@@ -97,7 +97,7 @@ button:hover, .btn:hover {
 }
 
 .link-group a {
-    color: #667eea;
+    color: #800020;
     text-decoration: none;
     font-size: 14px;
 }
@@ -122,28 +122,28 @@ button:hover, .btn:hover {
 }
 
 .message.success {
-    background-color: #4caf50;
+    background-color: #800020;
     color: white;
 }
 
 .message.error {
-    background-color: #f44336;
+    background-color: #C0392B;
     color: white;
 }
 
 .message.info {
-    background-color: #2196f3;
+    background-color: #FA8072;
     color: white;
 }
 
 .message.warning {
-    background-color: #ff9800;
-    color: white;
+    background-color: #FFB6A3;
+    color: #333;
 }
 
 .errorlist {
     list-style: none;
-    color: #f44336;
+    color: #C0392B;
     font-size: 14px;
     margin-top: 5px;
 }
@@ -166,9 +166,9 @@ button:hover, .btn:hover {
 }
 
 .user-type-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #A0324B 0%, #800020 100%);
     color: white;
-    border-color: #667eea;
+    border-color: #800020;
 }
 
 .dashboard-header {
@@ -177,7 +177,7 @@ button:hover, .btn:hover {
     align-items: center;
     margin-bottom: 30px;
     padding-bottom: 20px;
-    border-bottom: 2px solid #f0f0f0;
+    border-bottom: 2px solid #F5F5F5;
 }
 
 .dashboard-header h1 {
@@ -188,7 +188,7 @@ button:hover, .btn:hover {
 .logout-btn {
     padding: 10px 20px;
     width: auto;
-    background: #f44336;
+    background: #C0392B;
 }
 
 .stats-grid {
@@ -199,7 +199,7 @@ button:hover, .btn:hover {
 }
 
 .stat-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #A0324B 0%, #800020 100%);
     color: white;
     padding: 25px;
     border-radius: 10px;
@@ -218,7 +218,7 @@ button:hover, .btn:hover {
 }
 
 .course-list {
-    background: #f9f9f9;
+    background: #FAFAFA;
     padding: 20px;
     border-radius: 10px;
 }
@@ -245,12 +245,12 @@ button:hover, .btn:hover {
 }
 
 .course-attendance {
-    color: #667eea;
+    color: #800020;
     font-weight: bold;
 }
 
 .welcome-message {
-    background: #f0f0f0;
+    background: #F5F5F5;
     padding: 20px;
     border-radius: 10px;
     margin-bottom: 20px;
@@ -258,6 +258,6 @@ button:hover, .btn:hover {
 }
 
 .welcome-message h2 {
-    color: #667eea;
+    color: #800020;
     margin: 0;
 }
