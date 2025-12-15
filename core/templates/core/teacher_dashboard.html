@@ -432,7 +432,7 @@
         const target = event.target;
         
         // Start session button
-        if (target.classList.contains('btn-start') && target.getAttribute('data-taught-course-id')) {
+        if (target.classList.contains('btn-start') && !target.closest('form')) {
             const courseName = target.getAttribute('data-course-name');
             if (!confirm(`Start attendance session for ${courseName}?`)) return;
             

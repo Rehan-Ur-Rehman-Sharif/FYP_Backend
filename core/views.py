@@ -207,6 +207,7 @@ class TeacherViewSet(viewsets.ModelViewSet):
         
         if teacher_code:
             # Check for uniqueness
+            # Note: Database unique constraint provides ultimate protection against race conditions
             if Teacher.objects.exclude(teacher_id=teacher.teacher_id).filter(teacher_code=teacher_code).exists():
                 return Response(
                     {'error': 'Teacher code already exists'},
@@ -216,6 +217,7 @@ class TeacherViewSet(viewsets.ModelViewSet):
         
         if email:
             # Check for uniqueness
+            # Note: Database unique constraint provides ultimate protection against race conditions
             if Teacher.objects.exclude(teacher_id=teacher.teacher_id).filter(email=email).exists():
                 return Response(
                     {'error': 'Email already exists'},
@@ -419,14 +421,8 @@ class TaughtCourseViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Get the TaughtCourse instance
-        try:
-            taught_course = self.get_object()
-        except Http404:
-            return Response(
-                {'error': 'TaughtCourse not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        # Get the TaughtCourse instance (DRF will handle 404 automatically)
+        taught_course = self.get_object()
 
         # Verify the teacher owns this TaughtCourse
         if taught_course.teacher != teacher:
