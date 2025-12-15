@@ -2386,4 +2386,357 @@ class BulkUpdateStudentCoursesTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class TeacherUpdateProfileTestCase(APITestCase):
+    """Test cases for teacher profile update endpoint"""
+    
+    def setUp(self):
+        # Create a teacher user
+        self.teacher_user = User.objects.create_user(
+            username='teacher@test.com',
+            email='teacher@test.com',
+            password='TestPass123!'
+        )
+        self.teacher = Teacher.objects.create(
+            user=self.teacher_user,
+            teacher_name='Test Teacher',
+            email='teacher@test.com',
+            rfid='RFID_TEACHER_001'
+        )
+        
+        # Authenticate as teacher
+        self.client.force_authenticate(user=self.teacher_user)
+        self.url = reverse('teacher-update-profile')
+    
+    def test_teacher_update_name(self):
+        """Test teacher can update their name"""
+        response = self.client.post(self.url, {
+            'teacher_name': 'Updated Teacher Name'
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['message'], 'Profile updated successfully')
+        
+        # Verify update in database
+        self.teacher.refresh_from_db()
+        self.assertEqual(self.teacher.teacher_name, 'Updated Teacher Name')
+    
+    def test_teacher_update_email(self):
+        """Test teacher can update their email"""
+        response = self.client.post(self.url, {
+            'email': 'newemail@test.com'
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify update in database
+        self.teacher.refresh_from_db()
+        self.teacher_user.refresh_from_db()
+        self.assertEqual(self.teacher.email, 'newemail@test.com')
+        self.assertEqual(self.teacher_user.email, 'newemail@test.com')
+        self.assertEqual(self.teacher_user.username, 'newemail@test.com')
+    
+    def test_teacher_update_teacher_code(self):
+        """Test teacher can update their teacher code"""
+        response = self.client.post(self.url, {
+            'teacher_code': 'TC123'
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify update in database
+        self.teacher.refresh_from_db()
+        self.assertEqual(self.teacher.teacher_code, 'TC123')
+    
+    def test_teacher_update_multiple_fields(self):
+        """Test teacher can update multiple fields at once"""
+        response = self.client.post(self.url, {
+            'teacher_name': 'New Name',
+            'email': 'new@test.com',
+            'teacher_code': 'TC456'
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify all updates
+        self.teacher.refresh_from_db()
+        self.assertEqual(self.teacher.teacher_name, 'New Name')
+        self.assertEqual(self.teacher.email, 'new@test.com')
+        self.assertEqual(self.teacher.teacher_code, 'TC456')
+    
+    def test_teacher_update_no_fields(self):
+        """Test update fails when no fields provided"""
+        response = self.client.post(self.url, {}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+    
+    def test_teacher_update_duplicate_email(self):
+        """Test update fails when email already exists"""
+        # Create another teacher with different email
+        other_teacher = Teacher.objects.create(
+            teacher_name='Other Teacher',
+            email='other@test.com',
+            rfid='RFID_OTHER'
+        )
+        
+        response = self.client.post(self.url, {
+            'email': 'other@test.com'
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+    
+    def test_teacher_update_duplicate_teacher_code(self):
+        """Test update fails when teacher code already exists"""
+        # Create another teacher with a teacher code
+        other_teacher = Teacher.objects.create(
+            teacher_name='Other Teacher',
+            email='other@test.com',
+            teacher_code='EXISTING_CODE',
+            rfid='RFID_OTHER'
+        )
+        
+        response = self.client.post(self.url, {
+            'teacher_code': 'EXISTING_CODE'
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+    
+    def test_non_teacher_cannot_update_profile(self):
+        """Test non-teacher user cannot update teacher profile"""
+        # Create a student user
+        student_user = User.objects.create_user(
+            username='student@test.com',
+            email='student@test.com',
+            password='TestPass123!'
+        )
+        student = Student.objects.create(
+            user=student_user,
+            student_name='Test Student',
+            email='student@test.com',
+            rfid='RFID_STUDENT',
+            year=1,
+            dept='CS',
+            section='A'
+        )
+        
+        # Authenticate as student
+        self.client.force_authenticate(user=student_user)
+        
+        response = self.client.post(self.url, {
+            'teacher_name': 'Should Fail'
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class TeacherMyCoursesTestCase(APITestCase):
+    """Test cases for teacher my_courses endpoint"""
+    
+    def setUp(self):
+        # Create a teacher user
+        self.teacher_user = User.objects.create_user(
+            username='teacher@test.com',
+            email='teacher@test.com',
+            password='TestPass123!'
+        )
+        self.teacher = Teacher.objects.create(
+            user=self.teacher_user,
+            teacher_name='Test Teacher',
+            email='teacher@test.com',
+            rfid='RFID_TEACHER'
+        )
+        
+        # Create courses
+        self.course1 = Course.objects.create(course_name='Math 101', course_code='MATH101')
+        self.course2 = Course.objects.create(course_name='Physics 101', course_code='PHYS101')
+        
+        # Create taught courses
+        self.taught_course1 = TaughtCourse.objects.create(
+            course=self.course1,
+            teacher=self.teacher,
+            year=1,
+            section='A',
+            classes_taken='Room 101'
+        )
+        self.taught_course2 = TaughtCourse.objects.create(
+            course=self.course2,
+            teacher=self.teacher,
+            year=2,
+            section='B',
+            classes_taken='Room 102'
+        )
+        
+        # Authenticate as teacher
+        self.client.force_authenticate(user=self.teacher_user)
+        self.url = reverse('teacher-my-courses')
+    
+    def test_get_my_courses(self):
+        """Test teacher can get their own courses"""
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['courses']), 2)
+        self.assertEqual(response.data['teacher_id'], self.teacher.teacher_id)
+        
+        # Verify course data
+        course_ids = {course['course'] for course in response.data['courses']}
+        self.assertIn(self.course1.course_id, course_ids)
+        self.assertIn(self.course2.course_id, course_ids)
+
+
+class TaughtCourseTeacherUpdateTestCase(APITestCase):
+    """Test cases for teacher updating their taught courses"""
+    
+    def setUp(self):
+        # Create a teacher user
+        self.teacher_user = User.objects.create_user(
+            username='teacher@test.com',
+            email='teacher@test.com',
+            password='TestPass123!'
+        )
+        self.teacher = Teacher.objects.create(
+            user=self.teacher_user,
+            teacher_name='Test Teacher',
+            email='teacher@test.com',
+            rfid='RFID_TEACHER'
+        )
+        
+        # Create another teacher
+        self.other_teacher = Teacher.objects.create(
+            teacher_name='Other Teacher',
+            email='other@test.com',
+            rfid='RFID_OTHER'
+        )
+        
+        # Create a course
+        self.course = Course.objects.create(course_name='Math 101', course_code='MATH101')
+        
+        # Create taught course for the teacher
+        self.taught_course = TaughtCourse.objects.create(
+            course=self.course,
+            teacher=self.teacher,
+            year=1,
+            section='A',
+            classes_taken='Room 101'
+        )
+        
+        # Create taught course for other teacher
+        self.other_taught_course = TaughtCourse.objects.create(
+            course=self.course,
+            teacher=self.other_teacher,
+            year=2,
+            section='B',
+            classes_taken='Room 102'
+        )
+        
+        # Authenticate as teacher
+        self.client.force_authenticate(user=self.teacher_user)
+    
+    def test_teacher_update_own_course_section(self):
+        """Test teacher can update section of their own course"""
+        url = reverse('taughtcourse-teacher-update', kwargs={'pk': self.taught_course.id})
+        response = self.client.post(url, {
+            'section': 'C'
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify update
+        self.taught_course.refresh_from_db()
+        self.assertEqual(self.taught_course.section, 'C')
+    
+    def test_teacher_update_own_course_year(self):
+        """Test teacher can update year of their own course"""
+        url = reverse('taughtcourse-teacher-update', kwargs={'pk': self.taught_course.id})
+        response = self.client.post(url, {
+            'year': 3
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify update
+        self.taught_course.refresh_from_db()
+        self.assertEqual(self.taught_course.year, 3)
+    
+    def test_teacher_update_own_course_classes_taken(self):
+        """Test teacher can update classes_taken of their own course"""
+        url = reverse('taughtcourse-teacher-update', kwargs={'pk': self.taught_course.id})
+        response = self.client.post(url, {
+            'classes_taken': 'Room 201, Room 202'
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify update
+        self.taught_course.refresh_from_db()
+        self.assertEqual(self.taught_course.classes_taken, 'Room 201, Room 202')
+    
+    def test_teacher_update_multiple_fields(self):
+        """Test teacher can update multiple fields at once"""
+        url = reverse('taughtcourse-teacher-update', kwargs={'pk': self.taught_course.id})
+        response = self.client.post(url, {
+            'section': 'D',
+            'year': 4,
+            'classes_taken': 'New Rooms'
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify all updates
+        self.taught_course.refresh_from_db()
+        self.assertEqual(self.taught_course.section, 'D')
+        self.assertEqual(self.taught_course.year, 4)
+        self.assertEqual(self.taught_course.classes_taken, 'New Rooms')
+    
+    def test_teacher_update_no_fields(self):
+        """Test update fails when no fields provided"""
+        url = reverse('taughtcourse-teacher-update', kwargs={'pk': self.taught_course.id})
+        response = self.client.post(url, {}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_teacher_cannot_update_other_teacher_course(self):
+        """Test teacher cannot update another teacher's course"""
+        url = reverse('taughtcourse-teacher-update', kwargs={'pk': self.other_taught_course.id})
+        response = self.client.post(url, {
+            'section': 'Z'
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        
+        # Verify no update occurred
+        self.other_taught_course.refresh_from_db()
+        self.assertEqual(self.other_taught_course.section, 'B')
+    
+    def test_non_teacher_cannot_update_taught_course(self):
+        """Test non-teacher user cannot update taught course"""
+        # Create a student user
+        student_user = User.objects.create_user(
+            username='student@test.com',
+            email='student@test.com',
+            password='TestPass123!'
+        )
+        student = Student.objects.create(
+            user=student_user,
+            student_name='Test Student',
+            email='student@test.com',
+            rfid='RFID_STUDENT',
+            year=1,
+            dept='CS',
+            section='A'
+        )
+        
+        # Authenticate as student
+        self.client.force_authenticate(user=student_user)
+        
+        url = reverse('taughtcourse-teacher-update', kwargs={'pk': self.taught_course.id})
+        response = self.client.post(url, {
+            'section': 'Should Fail'
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
 
