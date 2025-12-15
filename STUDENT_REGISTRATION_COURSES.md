@@ -1,7 +1,7 @@
 # Student Registration with Course Enrollment - Example
 
 ## Overview
-This document demonstrates the new course enrollment feature during student registration.
+This document demonstrates the new course enrollment feature during student registration using course codes.
 
 ## API Endpoint
 ```
@@ -48,7 +48,7 @@ curl -X POST http://localhost:8000/api/auth/register/student/ \
     "year": 2,
     "dept": "CS",
     "section": "B",
-    "courses": [1, 2, 3]
+    "courses": ["CS201", "CS202", "MATH201"]
   }'
 ```
 
@@ -82,7 +82,7 @@ curl -X POST http://localhost:8000/api/auth/register/student/ \
 }
 ```
 
-## Example 3: Validation - Invalid course IDs
+## Example 3: Validation - Invalid course codes
 ```bash
 curl -X POST http://localhost:8000/api/auth/register/student/ \
   -H "Content-Type: application/json" \
@@ -95,7 +95,7 @@ curl -X POST http://localhost:8000/api/auth/register/student/ \
     "year": 1,
     "dept": "IT",
     "section": "A",
-    "courses": [999, 1000]
+    "courses": ["INVALID101", "NOTEXIST202"]
   }'
 ```
 
@@ -103,25 +103,25 @@ curl -X POST http://localhost:8000/api/auth/register/student/ \
 ```json
 {
     "courses": [
-        "The following course IDs do not exist: [999, 1000]"
+        "The following course codes do not exist: ['INVALID101', 'NOTEXIST202']"
     ]
 }
 ```
 
 ## How It Works
 
-1. **Course Validation**: The system validates that all provided course IDs exist in the Course table before creating the student record.
+1. **Course Validation**: The system validates that all provided course codes exist in the Course table before creating the student record.
 
-2. **Teacher Assignment**: For each course, the system looks up the TaughtCourse table to find which teacher teaches that course for the specific year and section of the student.
+2. **Teacher Assignment**: For each course code, the system looks up the TaughtCourse table to find which teacher teaches that course for the specific year and section of the student.
 
 3. **StudentCourse Creation**: If a teacher is found, a StudentCourse entry is created linking the student to the course with the assigned teacher. The `classes_attended` field is initialized as empty and will be populated as the student attends classes.
 
-4. **Atomic Transaction**: If any course ID is invalid, the entire registration is rejected - no student record or course enrollments are created.
+4. **Atomic Transaction**: If any course code is invalid, the entire registration is rejected - no student record or course enrollments are created.
 
 ## Prerequisites
 
 Before enrolling students in courses, ensure:
-1. Courses exist in the Course table
+1. Courses exist in the Course table with valid course codes
 2. Teachers are assigned to teach those courses via TaughtCourse entries
 3. TaughtCourse entries match the student's year and section
 
@@ -130,7 +130,7 @@ Before enrolling students in courses, ensure:
 ### Course Table
 - course_id (Primary Key)
 - course_name
-- course_code
+- course_code (Unique identifier used for enrollment)
 
 ### TaughtCourse Table
 - course (Foreign Key to Course)
@@ -148,6 +148,7 @@ Before enrolling students in courses, ensure:
 ## Notes
 
 - The `courses` field is optional - existing registration flows without courses will continue to work
+- Course codes are used instead of course IDs for a more user-friendly experience
 - Only courses with assigned teachers (via TaughtCourse) for the student's year/section will be enrolled
 - The system uses bulk operations for efficient database performance
 - All validations happen before any database writes (atomic transaction)

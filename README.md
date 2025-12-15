@@ -92,12 +92,12 @@ POST /api/auth/register/student/
     "year": 2,
     "dept": "CS",
     "section": "A",
-    "courses": [1, 2, 3]
+    "courses": ["MATH101", "PHYS101", "CS201"]
 }
 ```
 
-**Note:** The `courses` field is optional and accepts a list of course IDs. The system will:
-- Validate that all course IDs exist in the database
+**Note:** The `courses` field is optional and accepts a list of course codes. The system will:
+- Validate that all course codes exist in the database
 - Automatically assign teachers based on TaughtCourse entries for the student's year and section
 - Create StudentCourse entries for successful enrollments
 

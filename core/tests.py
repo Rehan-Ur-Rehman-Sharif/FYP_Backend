@@ -48,7 +48,7 @@ class StudentRegistrationTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
     
     def test_student_registration_with_valid_courses(self):
-        """Test student registration with valid course IDs"""
+        """Test student registration with valid course codes"""
         # Create courses
         course1 = Course.objects.create(course_name='Math 101', course_code='MATH101')
         course2 = Course.objects.create(course_name='Physics 101', course_code='PHYS101')
@@ -78,7 +78,7 @@ class StudentRegistrationTestCase(APITestCase):
         
         # Register student with courses
         data = self.valid_data.copy()
-        data['courses'] = [course1.course_id, course2.course_id]
+        data['courses'] = ['MATH101', 'PHYS101']
         response = self.client.post(self.url, data, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -91,17 +91,17 @@ class StudentRegistrationTestCase(APITestCase):
         self.assertEqual(student_courses.count(), 2)
         
         # Verify the courses are correctly assigned
-        course_ids = set(sc.course.course_id for sc in student_courses)
-        self.assertEqual(course_ids, {course1.course_id, course2.course_id})
+        course_codes = set(sc.course.course_code for sc in student_courses)
+        self.assertEqual(course_codes, {'MATH101', 'PHYS101'})
         
         # Verify teachers are assigned
         for sc in student_courses:
             self.assertEqual(sc.teacher, teacher)
     
-    def test_student_registration_with_invalid_course_ids(self):
-        """Test student registration fails with invalid course IDs"""
+    def test_student_registration_with_invalid_course_codes(self):
+        """Test student registration fails with invalid course codes"""
         data = self.valid_data.copy()
-        data['courses'] = [999, 1000]  # Non-existent course IDs
+        data['courses'] = ['INVALID101', 'NOTEXIST202']  # Non-existent course codes
         response = self.client.post(self.url, data, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -111,12 +111,12 @@ class StudentRegistrationTestCase(APITestCase):
         self.assertFalse(Student.objects.filter(email='student@test.com').exists())
     
     def test_student_registration_with_mixed_valid_invalid_courses(self):
-        """Test student registration fails when some course IDs are invalid"""
+        """Test student registration fails when some course codes are invalid"""
         # Create one valid course
         course1 = Course.objects.create(course_name='Math 101', course_code='MATH101')
         
         data = self.valid_data.copy()
-        data['courses'] = [course1.course_id, 999]  # One valid, one invalid
+        data['courses'] = ['MATH101', 'INVALID999']  # One valid, one invalid
         response = self.client.post(self.url, data, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -156,7 +156,7 @@ class StudentRegistrationTestCase(APITestCase):
         # Don't create any TaughtCourse entry
         
         data = self.valid_data.copy()
-        data['courses'] = [course.course_id]
+        data['courses'] = ['MATH101']
         response = self.client.post(self.url, data, format='json')
         
         # Registration should succeed
