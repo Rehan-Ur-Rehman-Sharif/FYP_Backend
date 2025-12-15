@@ -13,7 +13,7 @@ class StudentSerializer(serializers.ModelSerializer):
     """Serializer for Student model CRUD operations"""
     class Meta:
         model = Student
-        fields = ['student_id', 'student_name', 'email', 'rfid', 'overall_attendance', 'year', 'dept', 'section']
+        fields = ['student_id', 'student_name', 'roll_number', 'email', 'rfid', 'overall_attendance', 'year', 'dept', 'section']
         read_only_fields = ['student_id']
 
 
@@ -21,7 +21,7 @@ class TeacherSerializer(serializers.ModelSerializer):
     """Serializer for Teacher model CRUD operations"""
     class Meta:
         model = Teacher
-        fields = ['teacher_id', 'teacher_name', 'email', 'rfid']
+        fields = ['teacher_id', 'teacher_name', 'teacher_code', 'email', 'rfid']
         read_only_fields = ['teacher_id']
 
 
@@ -37,7 +37,7 @@ class CourseSerializer(serializers.ModelSerializer):
     """Serializer for Course model CRUD operations"""
     class Meta:
         model = Course
-        fields = ['course_id', 'course_name']
+        fields = ['course_id', 'course_name', 'course_code']
         read_only_fields = ['course_id']
 
 
@@ -98,7 +98,7 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Student
-        fields = ('email', 'password', 'password2', 'student_name', 'rfid', 'year', 'dept', 'section')
+        fields = ('email', 'password', 'password2', 'student_name', 'roll_number', 'rfid', 'year', 'dept', 'section')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -125,6 +125,7 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
             user=user,
             email=validated_data['email'],
             student_name=validated_data['student_name'],
+            roll_number=validated_data.get('roll_number'),
             rfid=validated_data['rfid'],
             year=validated_data['year'],
             dept=validated_data['dept'],
@@ -141,7 +142,7 @@ class TeacherRegistrationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Teacher
-        fields = ('email', 'password', 'password2', 'teacher_name', 'rfid')
+        fields = ('email', 'password', 'password2', 'teacher_name', 'teacher_code', 'rfid')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -168,6 +169,7 @@ class TeacherRegistrationSerializer(serializers.ModelSerializer):
             user=user,
             email=validated_data['email'],
             teacher_name=validated_data['teacher_name'],
+            teacher_code=validated_data.get('teacher_code'),
             rfid=validated_data['rfid']
         )
         

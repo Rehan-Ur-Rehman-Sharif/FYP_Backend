@@ -14,6 +14,7 @@ class Student(models.Model):
     student_id = models.AutoField(primary_key=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True, related_name='student_profile')
     student_name = models.CharField(max_length=255)
+    roll_number = models.CharField(max_length=50, unique=True, null=True, blank=True)
     email = models.EmailField(unique=True, null=True, blank=True)
     # image = models.ImageField(upload_to='student_images/', null=True, blank=True)  # for CV
     rfid = models.CharField(max_length=100, unique=True)
@@ -28,6 +29,7 @@ class Student(models.Model):
 class Course(models.Model):
     course_id = models.AutoField(primary_key=True)
     course_name = models.CharField(max_length=200)
+    course_code = models.CharField(max_length=50, unique=True, null=True, blank=True)
 
     def __str__(self):
         return self.course_name
@@ -36,6 +38,7 @@ class Teacher(models.Model):
     teacher_id = models.AutoField(primary_key=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True, related_name='teacher_profile')
     teacher_name = models.CharField(max_length=255)
+    teacher_code = models.CharField(max_length=50, unique=True, null=True, blank=True)
     email = models.EmailField(unique=True, null=True, blank=True)
     # image = models.ImageField(upload_to='teacher_images/', null=True, blank=True)
     rfid = models.CharField(max_length=100, unique=True)
